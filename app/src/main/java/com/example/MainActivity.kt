@@ -225,6 +225,10 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
 
+                // Only hand off web schemes; ignore intent:, file:, javascript: etc. from page content
+                val scheme = uri.scheme?.lowercase(Locale.ROOT)
+                if (scheme != "http" && scheme != "https") return true
+
                 // Open external non-Instagram links in an external browser Intent
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, uri)
