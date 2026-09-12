@@ -1,0 +1,6 @@
+{
+  "name": "CleanGram",
+  "description": "Lightweight, distraction-free Instagram WebView wrapper that hides Reels, Explore feeds, and algorithmic suggestions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
