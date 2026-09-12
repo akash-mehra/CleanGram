@@ -21,6 +21,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: View
+    private lateinit var errorMessage: TextView
     private lateinit var retryButton: Button
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -62,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
+        errorMessage = findViewById(R.id.errorMessage)
         retryButton = findViewById(R.id.retryButton)
 
         // Handle edge-to-edge window insets cleanly
@@ -258,10 +261,17 @@ class MainActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                if (request?.isForMainFrame == true) {
-                    webView.visibility = View.GONE
-                    errorContainer.visibility = View.VISIBLE
-                }
+                if (request?.isForMainFrame != true) return
+
+                // A navigation we replaced ourselves (e.g. the Reels redirect) is reported as an
+                // unsupported-scheme error; that is not a connectivity failure.
+                val failure = error ?: return
+                val code = failure.errorCode
+                if (code == ERROR_UNSUPPORTED_SCHEME) return
+
+                errorMessage.text = getString(R.string.error_detail, failure.description ?: "", code)
+                webView.visibility = View.GONE
+                errorContainer.visibility = View.VISIBLE
             }
         }
     }
