@@ -267,20 +267,6 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 injectDistractionFreeScript(view)
                 CookieManager.getInstance().flush()
-
-                // The login endpoint rejects the request as malformed (400) when either the CSRF
-                // cookie is missing or Android overwrites the page's X-Requested-With header.
-                // Report both so the cause is unambiguous.
-                if (url?.contains("/accounts/login") == true) {
-                    val cookies = CookieManager.getInstance().getCookie(DEFAULT_URL).orEmpty()
-                    val suppressed =
-                        WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)
-                    Toast.makeText(
-                        this@MainActivity,
-                        "csrftoken=${cookies.contains("csrftoken")} xrw_suppressed=$suppressed",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
             }
 
             // Surfaces the status of a failed request (e.g. a rejected login POST), which the
@@ -293,7 +279,15 @@ class MainActivity : AppCompatActivity() {
                 super.onReceivedHttpError(view, request, errorResponse)
                 val status = errorResponse?.statusCode ?: return
                 val path = request?.url?.path ?: return
-                Toast.makeText(this@MainActivity, "HTTP $status $path", Toast.LENGTH_LONG).show()
+                val csrf = CookieManager.getInstance().getCookie(DEFAULT_URL)
+                    .orEmpty().contains("csrftoken")
+                val xrw =
+                    WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)
+                Toast.makeText(
+                    this@MainActivity,
+                    "HTTP $status $path csrf=$csrf xrw=$xrw",
+                    Toast.LENGTH_LONG
+                ).show()
             }
 
             override fun onReceivedError(
