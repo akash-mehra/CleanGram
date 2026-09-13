@@ -317,6 +317,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectDistractionFreeScript(view: WebView?) {
+        // Nothing to hide until the user is signed in, and the observer re-scans the DOM on
+        // every mutation - which on the login screen means on every keystroke. Skip it there.
+        val signedIn = CookieManager.getInstance().getCookie(DEFAULT_URL)
+            .orEmpty().contains("sessionid")
+        if (!signedIn) return
         view?.evaluateJavascript(DISTRACTION_FREE_INJECTION_JS, null)
     }
 
