@@ -220,7 +220,7 @@ class MainActivity : AppCompatActivity() {
             private fun handleUrlNavigation(view: WebView?, uri: Uri): Boolean {
                 val urlString = uri.toString()
 
-                // Block or drop accidental direct navigation to Reels and redirect back to main Instagram feed
+                // Block or drop accidental direct navigation to Reels and redirect back to the Following feed
                 if (isReelsUrl(urlString)) {
                     view?.loadUrl(DEFAULT_URL)
                     return true
@@ -324,7 +324,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val DEFAULT_URL = "https://www.instagram.com/"
+        // Instagram's own chronological Following feed: only accounts you follow, no
+        // algorithmic recommendations. Far more reliable than hiding suggestions in the DOM.
+        const val DEFAULT_URL = "https://www.instagram.com/?variant=following"
 
         fun isInstagramHost(host: String?): Boolean {
             if (host == null) return false
