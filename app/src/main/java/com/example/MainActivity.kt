@@ -113,6 +113,10 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             mediaPlaybackRequiresUserGesture = false
+            // Instagram refuses to log in when it detects an embedded browser via the "; wv"
+            // token in the default WebView UA, failing with its own generic "couldn't connect"
+            // message. Drop the token so we present as the device's plain Chrome.
+            userAgentString = userAgentString.replace("; wv", "")
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
