@@ -238,6 +238,13 @@ class MainActivity : AppCompatActivity() {
             }
 
             private fun handleUrlNavigation(view: WebView?, uri: Uri): Boolean {
+                // Instagram redirects to intent:// to force a hand-off into its native app. This
+                // must be checked before the host check below, because those URLs sit on
+                // instagram.com hosts and the WebView cannot load a non-web scheme. Swallow them
+                // and stay on the web version, which is the whole point of this app.
+                val scheme = uri.scheme?.lowercase(Locale.ROOT)
+                if (scheme != "http" && scheme != "https") return true
+
                 val urlString = uri.toString()
 
                 // Block or drop accidental direct navigation to Reels and redirect back to the Following feed
@@ -251,10 +258,6 @@ class MainActivity : AppCompatActivity() {
                 if (isInstagramHost(host)) {
                     return false
                 }
-
-                // Only hand off web schemes; ignore intent:, file:, javascript: etc. from page content
-                val scheme = uri.scheme?.lowercase(Locale.ROOT)
-                if (scheme != "http" && scheme != "https") return true
 
                 // Open external non-Instagram links in an external browser Intent
                 try {
