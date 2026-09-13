@@ -15,6 +15,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -22,6 +23,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,6 +31,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
@@ -118,6 +122,12 @@ class MainActivity : AppCompatActivity() {
             // message. Drop the token so we present as the device's plain Chrome.
             userAgentString = userAgentString.replace("; wv", "")
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
+
+        // Android tags every WebView request with "X-Requested-With: <package>", which sites
+        // use to detect an embedded browser. Send it to no origin at all.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            WebSettingsCompat.setRequestedWithHeaderOriginAllowList(webView.settings, emptySet())
         }
 
         // 3. WebChromeClient for file uploads, photo pickers, alerts, and progress
@@ -257,6 +267,19 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 injectDistractionFreeScript(view)
                 CookieManager.getInstance().flush()
+            }
+
+            // Surfaces the status of a failed request (e.g. a rejected login POST), which the
+            // page itself reports only as a generic connection error.
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                val status = errorResponse?.statusCode ?: return
+                val path = request?.url?.path ?: return
+                Toast.makeText(this@MainActivity, "HTTP $status $path", Toast.LENGTH_LONG).show()
             }
 
             override fun onReceivedError(
