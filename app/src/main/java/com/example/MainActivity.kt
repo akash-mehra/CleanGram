@@ -103,6 +103,13 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
+        // Chrome on Android sends a "reduced" user agent with a frozen OS version and no device
+        // model. The WebView's own string additionally carries "Version/4.0" and a Build/ tag,
+        // which mark it as an embedded browser. Match Chrome exactly, keeping its major version.
+        val chromeMajor = WebViewCompat.getCurrentWebViewPackage(this)?.versionName
+            ?.substringBefore('.')
+            ?.takeIf { it.isNotEmpty() }
+
         // 2. WebSettings configuration
         @Suppress("DEPRECATION")
         webView.settings.apply {
@@ -118,10 +125,12 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             mediaPlaybackRequiresUserGesture = false
-            // Instagram refuses to log in when it detects an embedded browser via the "; wv"
-            // token in the default WebView UA, failing with its own generic "couldn't connect"
-            // message. Drop the token so we present as the device's plain Chrome.
-            userAgentString = userAgentString.replace("; wv", "")
+            userAgentString = if (chromeMajor != null) {
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                    "Chrome/$chromeMajor.0.0.0 Mobile Safari/537.36"
+            } else {
+                userAgentString.replace("; wv", "")
+            }
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
