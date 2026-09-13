@@ -32,6 +32,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.util.Locale
 
@@ -283,9 +284,13 @@ class MainActivity : AppCompatActivity() {
                     .orEmpty().contains("csrftoken")
                 val xrw =
                     WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)
+                // The WebView version says whether xrw=false means "too old to suppress the
+                // header" or "new enough that the header is already gone" - opposite conclusions.
+                val webViewVersion =
+                    WebViewCompat.getCurrentWebViewPackage(this@MainActivity)?.versionName ?: "?"
                 Toast.makeText(
                     this@MainActivity,
-                    "HTTP $status $path csrf=$csrf xrw=$xrw",
+                    "HTTP $status csrf=$csrf xrw=$xrw wv=$webViewVersion",
                     Toast.LENGTH_LONG
                 ).show()
             }
