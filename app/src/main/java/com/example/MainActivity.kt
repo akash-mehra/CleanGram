@@ -1,8 +1,8 @@
 package com.example
 
 import android.annotation.SuppressLint
-import android.app.DownloadManager
 import android.app.Activity
+import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
-import android.provider.Settings
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JsPromptResult
