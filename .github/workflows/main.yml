@@ -21,6 +21,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Default is "tools platform-tools"; the obsolete "tools" package was removed from
+          # Google's SDK repository, so sdkmanager now fails trying to install it. AGP fetches
+          # the platform and build-tools it needs by itself.
+          packages: platform-tools
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
