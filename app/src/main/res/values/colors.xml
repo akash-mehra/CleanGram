@@ -8,4 +8,6 @@
     <color name="on_accent">#FFFFFFFF</color>
     <color name="accent_ripple">#40FFFFFF</color>
     <color name="progress_track">#1A000000</color>
+    <color name="surface_elevated">#FFF4F4F4</color>
+    <color name="outline">#1F000000</color>
 </resources>

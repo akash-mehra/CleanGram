@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -33,6 +35,10 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Build Debug APK
+        env:
+          # The in-app updater compares this against the release tag below.
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.${{ github.run_number }}
         run: |
           if [ -f "gradlew" ]; then
             chmod +x gradlew
@@ -46,3 +52,16 @@ jobs:
         with:
           name: CleanGram-APK
           path: "**/build/outputs/apk/debug/*.apk"
+
+      # Published as a release because release assets download without authentication,
+      # which is what lets the in-app updater fetch them with no token in the APK.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Re-running a workflow reuses its run number, so clear any existing tag first.
+          gh release delete "v${{ github.run_number }}" --yes --cleanup-tag || true
+          gh release create "v${{ github.run_number }}" \
+            --title "CleanGram v${{ github.run_number }}" \
+            --notes "Automated build of ${{ github.sha }}" \
+            app/build/outputs/apk/debug/*.apk

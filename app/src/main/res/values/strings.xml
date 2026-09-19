@@ -4,4 +4,8 @@
     <string name="error_message">CleanGram can\'t reach Instagram right now. Check your connection and try again.</string>
     <string name="retry">Try again</string>
     <string name="loading">Loading</string>
+    <string name="update_available">A new build is ready</string>
+    <string name="update_action">Install</string>
+    <string name="update_downloading">Downloading\u2026</string>
+    <string name="update_dismiss">Dismiss update</string>
 </resources>

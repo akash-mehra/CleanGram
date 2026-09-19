@@ -17,8 +17,10 @@ android {
     applicationId = "com.aistudio.cleangram.kfqvx"
     minSdk = 24
     targetSdk = 35
-    versionCode = 1
-    versionName = "1.0"
+    // CI passes its run number so each published build outranks the last; the in-app
+    // updater compares this against the release tag.
+    versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+    versionName = System.getenv("VERSION_NAME") ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

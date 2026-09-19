@@ -1,12 +1,19 @@
 package com.example
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
+import android.provider.Settings
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JsPromptResult
@@ -29,10 +36,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,6 +49,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: View
     private lateinit var retryButton: Button
+    private lateinit var updateBar: View
+    private lateinit var updateButton: Button
+
+    private var pendingUpdate: Update? = null
+    private var updateDownloadId: Long = -1L
+
+    /** DownloadManager announces completion by broadcast; hand the file to the installer. */
+    private val downloadComplete = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+            if (id != -1L && id == updateDownloadId) {
+                Updater.install(this@MainActivity, id)
+            }
+        }
+    }
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
@@ -67,6 +91,8 @@ class MainActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
         retryButton = findViewById(R.id.retryButton)
+        updateBar = findViewById(R.id.updateBar)
+        updateButton = findViewById(R.id.updateButton)
 
         // Inset for system bars AND display cutouts, so nothing sits under a notch or under
         // the landscape navigation bar. The keyboard is folded into the bottom inset, otherwise
@@ -92,6 +118,48 @@ class MainActivity : AppCompatActivity() {
             webView.restoreState(savedInstanceState)
         } else {
             webView.loadUrl(DEFAULT_URL)
+        }
+
+        setupUpdates()
+    }
+
+    private fun setupUpdates() {
+        ContextCompat.registerReceiver(
+            this,
+            downloadComplete,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            // Sent by the system, so the receiver has to be visible outside the app.
+            ContextCompat.RECEIVER_EXPORTED
+        )
+
+        updateButton.setOnClickListener {
+            val update = pendingUpdate ?: return@setOnClickListener
+
+            // Sideloading requires the user to allow this app to install packages.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                !packageManager.canRequestPackageInstalls()
+            ) {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+                return@setOnClickListener
+            }
+
+            updateButton.isEnabled = false
+            updateButton.setText(R.string.update_downloading)
+            updateDownloadId = Updater.enqueueDownload(this, update)
+        }
+
+        // A failed check is not worth reporting: the app works regardless.
+        lifecycleScope.launch {
+            val update = Updater.findUpdate() ?: return@launch
+            pendingUpdate = update
+            updateBar.alpha = 0f
+            updateBar.visibility = View.VISIBLE
+            updateBar.animate().alpha(1f).setDuration(200)
         }
     }
 
@@ -370,6 +438,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(downloadComplete) }
         if (::webView.isInitialized) {
             webView.stopLoading()
             (webView.parent as? ViewGroup)?.removeView(webView)

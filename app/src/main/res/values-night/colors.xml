@@ -7,4 +7,6 @@
     <color name="on_accent">#FFFFFFFF</color>
     <color name="accent_ripple">#40FFFFFF</color>
     <color name="progress_track">#26FFFFFF</color>
+    <color name="surface_elevated">#FF1C1C1E</color>
+    <color name="outline">#26FFFFFF</color>
 </resources>
