@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="surface">#FF000000</color>
+    <color name="on_surface">#FFFAFAFA</color>
+    <color name="on_surface_variant">#FFA8A8A8</color>
+    <color name="accent">#FFE1306C</color>
+    <color name="on_accent">#FFFFFFFF</color>
+    <color name="accent_ripple">#40FFFFFF</color>
+    <color name="progress_track">#26FFFFFF</color>
+</resources>

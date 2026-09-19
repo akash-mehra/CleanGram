@@ -15,20 +15,18 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebSettingsCompat
@@ -41,7 +39,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: View
-    private lateinit var errorMessage: TextView
     private lateinit var retryButton: Button
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -69,14 +66,17 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
-        errorMessage = findViewById(R.id.errorMessage)
         retryButton = findViewById(R.id.retryButton)
 
-        // Handle edge-to-edge window insets cleanly
+        // Inset for system bars AND display cutouts, so nothing sits under a notch or under
+        // the landscape navigation bar. The keyboard is folded into the bottom inset, otherwise
+        // it covers whatever field the page has focused.
         ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { view, insets ->
-            val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
-            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            view.setPadding(0, statusBars.top, 0, navBars.bottom)
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
             insets
         }
 
@@ -84,8 +84,7 @@ class MainActivity : AppCompatActivity() {
         setupBackNavigation()
 
         retryButton.setOnClickListener {
-            errorContainer.visibility = View.GONE
-            webView.visibility = View.VISIBLE
+            hideError()
             webView.reload()
         }
 
@@ -98,6 +97,9 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
+        // Paint the themed surface behind the page so loads don't flash white in dark mode.
+        webView.setBackgroundColor(ContextCompat.getColor(this, R.color.surface))
+
         // 1. Session persistence via CookieManager
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
@@ -134,6 +136,13 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
+        // Dark mode: the theme is DayNight, so isLightTheme flips with the system setting and
+        // the WebView asks the page for its dark styling (Instagram honours prefers-color-scheme),
+        // darkening algorithmically where the page has none.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, true)
+        }
+
         // Android tags every WebView request with "X-Requested-With: <package>", which sites
         // use to detect an embedded browser. Send it to no origin at all.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
@@ -143,11 +152,18 @@ class MainActivity : AppCompatActivity() {
         // 3. WebChromeClient for file uploads, photo pickers, alerts, and progress
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progressBar.progress = newProgress
                 if (newProgress < 100) {
-                    progressBar.visibility = View.VISIBLE
-                    progressBar.progress = newProgress
-                } else {
-                    progressBar.visibility = View.GONE
+                    if (progressBar.visibility != View.VISIBLE) {
+                        progressBar.animate().cancel()
+                        progressBar.alpha = 1f
+                        progressBar.visibility = View.VISIBLE
+                    }
+                } else if (progressBar.visibility == View.VISIBLE) {
+                    progressBar.animate()
+                        .alpha(0f)
+                        .setDuration(220)
+                        .withEndAction { progressBar.visibility = View.GONE }
                 }
             }
 
@@ -271,8 +287,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                errorContainer.visibility = View.GONE
-                webView.visibility = View.VISIBLE
+                hideError()
                 injectDistractionFreeScript(view)
             }
 
@@ -282,30 +297,6 @@ class MainActivity : AppCompatActivity() {
                 CookieManager.getInstance().flush()
             }
 
-            // Surfaces the status of a failed request (e.g. a rejected login POST), which the
-            // page itself reports only as a generic connection error.
-            override fun onReceivedHttpError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                errorResponse: WebResourceResponse?
-            ) {
-                super.onReceivedHttpError(view, request, errorResponse)
-                val status = errorResponse?.statusCode ?: return
-                val path = request?.url?.path ?: return
-                val csrf = CookieManager.getInstance().getCookie(DEFAULT_URL)
-                    .orEmpty().contains("csrftoken")
-                val xrw =
-                    WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)
-                // The WebView version says whether xrw=false means "too old to suppress the
-                // header" or "new enough that the header is already gone" - opposite conclusions.
-                val webViewVersion =
-                    WebViewCompat.getCurrentWebViewPackage(this@MainActivity)?.versionName ?: "?"
-                Toast.makeText(
-                    this@MainActivity,
-                    "HTTP $status csrf=$csrf xrw=$xrw wv=$webViewVersion",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
 
             override fun onReceivedError(
                 view: WebView?,
@@ -317,15 +308,26 @@ class MainActivity : AppCompatActivity() {
 
                 // A navigation we replaced ourselves (e.g. the Reels redirect) is reported as an
                 // unsupported-scheme error; that is not a connectivity failure.
-                val failure = error ?: return
-                val code = failure.errorCode
-                if (code == ERROR_UNSUPPORTED_SCHEME) return
+                if (error?.errorCode == ERROR_UNSUPPORTED_SCHEME) return
 
-                errorMessage.text = getString(R.string.error_detail, failure.description ?: "", code)
-                webView.visibility = View.GONE
-                errorContainer.visibility = View.VISIBLE
+                showError()
             }
         }
+    }
+
+    private fun showError() {
+        if (errorContainer.visibility == View.VISIBLE) return
+        progressBar.visibility = View.GONE
+        webView.visibility = View.GONE
+        errorContainer.alpha = 0f
+        errorContainer.visibility = View.VISIBLE
+        errorContainer.animate().alpha(1f).setDuration(180)
+    }
+
+    private fun hideError() {
+        errorContainer.animate().cancel()
+        errorContainer.visibility = View.GONE
+        webView.visibility = View.VISIBLE
     }
 
     private fun injectDistractionFreeScript(view: WebView?) {
