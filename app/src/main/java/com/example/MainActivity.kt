@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -47,9 +48,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: View
+    private lateinit var loadingOverlay: View
+    private lateinit var orbView: OrbLoadingView
     private lateinit var retryButton: Button
     private lateinit var updateBar: View
     private lateinit var updateButton: Button
+
+    private var loadingVisible = false
+    private var loadingShownAt = 0L
+
+    /** Set only when this WebView can't run scripts at document start. */
+    private var fallbackFilterScript: String? = null
+
+    /** A load that never finishes shows the retry screen instead of spinning forever. */
+    private val loadTimeout = Runnable {
+        if (loadingVisible) {
+            webView.stopLoading()
+            showError()
+        }
+    }
 
     private var pendingUpdate: Update? = null
     private var updateDownloadId: Long = -1L
@@ -89,6 +106,8 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
+        loadingOverlay = findViewById(R.id.loadingOverlay)
+        orbView = findViewById(R.id.orbView)
         retryButton = findViewById(R.id.retryButton)
         updateBar = findViewById(R.id.updateBar)
         updateButton = findViewById(R.id.updateButton)
@@ -110,12 +129,14 @@ class MainActivity : AppCompatActivity() {
 
         retryButton.setOnClickListener {
             hideError()
-            webView.reload()
+            showLoadingOverlay()
+            if (webView.url.isNullOrBlank()) webView.loadUrl(DEFAULT_URL) else webView.reload()
         }
 
-        if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState)
-        } else {
+        showLoadingOverlay()
+        // restoreState returns null when there was nothing to restore; load the feed then,
+        // or the loader would sit there until the timeout.
+        if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(DEFAULT_URL)
         }
 
@@ -209,6 +230,13 @@ class MainActivity : AppCompatActivity() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, true)
         }
+
+        // Rasterise just beyond the viewport so fast scrolling doesn't reveal blank tiles.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.OFF_SCREEN_PRERASTER)) {
+            WebSettingsCompat.setOffscreenPreRaster(webView.settings, true)
+        }
+
+        installPageFilter()
 
         // Android tags every WebView request with "X-Requested-With: <package>", which sites
         // use to detect an embedded browser. Send it to no origin at all.
@@ -332,7 +360,8 @@ class MainActivity : AppCompatActivity() {
 
                 // Block or drop accidental direct navigation to Reels and redirect back to the Following feed
                 if (isReelsUrl(urlString)) {
-                    view?.loadUrl(DEFAULT_URL)
+                    // Loading from inside this callback races the navigation being cancelled.
+                    view?.post { view.loadUrl(DEFAULT_URL) }
                     return true
                 }
 
@@ -355,15 +384,21 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 hideError()
-                injectDistractionFreeScript(view)
+            }
+
+            // The page's first frame is ready: the earliest moment the loader can step aside,
+            // well before onPageFinished, which waits for every image on the feed.
+            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                super.onPageCommitVisible(view, url)
+                hideLoadingOverlay()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                injectDistractionFreeScript(view)
+                fallbackFilterScript?.let { view?.evaluateJavascript(it, null) }
+                hideLoadingOverlay()
                 CookieManager.getInstance().flush()
             }
-
 
             override fun onReceivedError(
                 view: WebView?,
@@ -382,7 +417,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showLoadingOverlay() {
+        webView.removeCallbacks(loadTimeout)
+        loadingOverlay.animate().cancel()
+        loadingOverlay.alpha = 1f
+        loadingOverlay.visibility = View.VISIBLE
+        orbView.start()
+        loadingVisible = true
+        loadingShownAt = SystemClock.uptimeMillis()
+        webView.postDelayed(loadTimeout, LOAD_TIMEOUT_MS)
+    }
+
+    private fun hideLoadingOverlay(immediately: Boolean = false) {
+        webView.removeCallbacks(loadTimeout)
+        if (!loadingVisible) return
+        loadingVisible = false
+
+        if (immediately) {
+            loadingOverlay.animate().cancel()
+            loadingOverlay.visibility = View.GONE
+            orbView.stop()
+            return
+        }
+        // A fast (cached) load would otherwise flash the loader for a single frame.
+        val remaining = MIN_LOADING_MS - (SystemClock.uptimeMillis() - loadingShownAt)
+        loadingOverlay.animate()
+            .setStartDelay(remaining.coerceAtLeast(0L))
+            .alpha(0f)
+            .setDuration(280)
+            .withEndAction {
+                loadingOverlay.visibility = View.GONE
+                orbView.stop()
+            }
+    }
+
     private fun showError() {
+        hideLoadingOverlay(immediately = true)
         if (errorContainer.visibility == View.VISIBLE) return
         progressBar.visibility = View.GONE
         webView.visibility = View.GONE
@@ -397,26 +467,36 @@ class MainActivity : AppCompatActivity() {
         webView.visibility = View.VISIBLE
     }
 
-    private fun injectDistractionFreeScript(view: WebView?) {
-        // Nothing to hide until the user is signed in, and the observer re-scans the DOM on
-        // every mutation - which on the login screen means on every keystroke. Skip it there.
-        val signedIn = CookieManager.getInstance().getCookie(DEFAULT_URL)
-            .orEmpty().contains("sessionid")
-        if (!signedIn) return
-        view?.evaluateJavascript(DISTRACTION_FREE_INJECTION_JS, null)
+    private fun installPageFilter() {
+        val script = assets.open(FILTER_ASSET).bufferedReader().use { it.readText() }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            // Runs before Instagram's own scripts on every page, and keeps working across its
+            // in-app navigations, which never reach onPageStarted.
+            WebViewCompat.addDocumentStartJavaScript(webView, script, INSTAGRAM_ORIGINS)
+        } else {
+            fallbackFilterScript = script
+        }
     }
 
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                when {
+                    webView.canGoBack() -> webView.goBack()
+                    // Instagram navigates in-page, so there can be nothing to go back to while
+                    // the user is deep in a profile or post. Go up to the feed rather than quit.
+                    !isOnFeed(webView.url) -> webView.loadUrl(DEFAULT_URL)
+                    // Leave like a browser does: the WebView stays alive, so returning is
+                    // instant rather than a cold reload of the whole feed.
+                    else -> moveTaskToBack(true)
                 }
             }
         })
+    }
+
+    private fun isOnFeed(url: String?): Boolean {
+        val path = url?.let { Uri.parse(it).path }
+        return path.isNullOrEmpty() || path == "/"
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -427,18 +507,21 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         webView.onPause()
+        webView.pauseTimers()
         CookieManager.getInstance().flush()
     }
 
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        webView.resumeTimers()
         CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(downloadComplete) }
         if (::webView.isInitialized) {
+            webView.removeCallbacks(loadTimeout)
             webView.stopLoading()
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.destroy()
@@ -466,130 +549,10 @@ class MainActivity : AppCompatActivity() {
                 lower.contains("/reel/")
         }
 
-        /**
-         * Robust, reusable distraction-free injection script.
-         * Injects custom CSS rules and uses a lightweight MutationObserver
-         * to hide Reels, Explore shortcuts, and algorithmic feed suggestions.
-         */
-        val DISTRACTION_FREE_INJECTION_JS = """
-            (function() {
-                const STYLE_ID = 'cleangram-distraction-free-css';
-                const SCRIPT_INIT_KEY = '__cleangram_observer_active__';
+        private const val FILTER_ASSET = "cleangram.js"
+        private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
 
-                const customCss = `
-                    /* 1. Hide Reels navigation tabs, shortcuts, and floating action buttons */
-                    a[href*="/reels/"],
-                    a[href*="/reels"],
-                    a[href*="/reel/"],
-                    svg[aria-label*="Reels" i],
-                    svg[aria-label*="reels" i],
-                    [aria-label*="Reels" i],
-                    [data-testid*="reels" i],
-
-                    /* 2. Hide Explore / Search discovery feeds */
-                    a[href*="/explore/"],
-                    a[href*="/explore"],
-                    svg[aria-label*="Explore" i],
-                    svg[aria-label*="explore" i],
-                    [aria-label*="Explore" i],
-                    [data-testid*="explore" i],
-
-                    /* 3. Hide algorithmic suggestion elements and containers in feed */
-                    [data-testid*="suggested" i],
-                    div[data-testid*="suggestion" i] {
-                        display: none !important;
-                        visibility: hidden !important;
-                        pointer-events: none !important;
-                        height: 0 !important;
-                        max-height: 0 !important;
-                        opacity: 0 !important;
-                        overflow: hidden !important;
-                    }
-                `;
-
-                function injectCSS() {
-                    if (!document.getElementById(STYLE_ID)) {
-                        const style = document.createElement('style');
-                        style.id = STYLE_ID;
-                        style.type = 'text/css';
-                        style.appendChild(document.createTextNode(customCss));
-                        const target = document.head || document.documentElement;
-                        if (target) {
-                            target.appendChild(style);
-                        }
-                    }
-                }
-
-                function removeDistractionNodes() {
-                    // Hide parent containers for Reels & Explore navigation items
-                    const targetSelectors = [
-                        'a[href*="/reels/"]',
-                        'a[href*="/reels"]',
-                        'a[href*="/reel/"]',
-                        'a[href*="/explore/"]',
-                        'a[href*="/explore"]',
-                        'svg[aria-label*="Reels" i]',
-                        'svg[aria-label*="Explore" i]'
-                    ];
-
-                    document.querySelectorAll(targetSelectors.join(',')).forEach(function(el) {
-                        const navParent = el.closest('li, [role="tab"], [role="menuitem"], div[class*="nav"], div[class*="Nav"]');
-                        if (navParent && navParent !== document.body && navParent !== document.documentElement) {
-                            navParent.style.setProperty('display', 'none', 'important');
-                            navParent.style.setProperty('visibility', 'hidden', 'important');
-                        } else {
-                            el.style.setProperty('display', 'none', 'important');
-                            el.style.setProperty('visibility', 'hidden', 'important');
-                        }
-                    });
-
-                    // Hide "Suggested for you" algorithmic recommendation containers in main feed
-                    const suggestionKeywords = [
-                        'suggested for you',
-                        'suggestions for you',
-                        'suggested posts',
-                        'suggested accounts',
-                        'suggested reels'
-                    ];
-
-                    const textNodes = document.querySelectorAll('span, p, h2, h3, h4, div');
-                    textNodes.forEach(function(node) {
-                        if (node.children.length === 0 && node.textContent) {
-                            const trimmedText = node.textContent.trim().toLowerCase();
-                            if (suggestionKeywords.some(function(keyword) { return trimmedText.includes(keyword); })) {
-                                const feedContainer = node.closest('article, section, div[data-testid], div[role="presentation"]');
-                                if (feedContainer && feedContainer !== document.body && feedContainer !== document.documentElement) {
-                                    feedContainer.style.setProperty('display', 'none', 'important');
-                                    feedContainer.style.setProperty('visibility', 'hidden', 'important');
-                                } else if (node.parentElement) {
-                                    node.parentElement.style.setProperty('display', 'none', 'important');
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Initial injection
-                injectCSS();
-                removeDistractionNodes();
-
-                // Setup MutationObserver to continuously hide dynamically rendered items as user scrolls
-                if (!window[SCRIPT_INIT_KEY]) {
-                    window[SCRIPT_INIT_KEY] = true;
-                    const observer = new MutationObserver(function(mutations) {
-                        injectCSS();
-                        removeDistractionNodes();
-                    });
-
-                    const target = document.documentElement || document.body;
-                    if (target) {
-                        observer.observe(target, {
-                            childList: true,
-                            subtree: true
-                        });
-                    }
-                }
-            })();
-        """.trimIndent()
+        private const val LOAD_TIMEOUT_MS = 25_000L
+        private const val MIN_LOADING_MS = 600L
     }
 }

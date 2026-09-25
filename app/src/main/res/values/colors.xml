@@ -10,4 +10,6 @@
     <color name="progress_track">#1A000000</color>
     <color name="surface_elevated">#FFF4F4F4</color>
     <color name="outline">#1F000000</color>
+    <!-- Soft shadow behind text over the loading orbs; none needed on a light background. -->
+    <color name="text_halo">#00000000</color>
 </resources>
