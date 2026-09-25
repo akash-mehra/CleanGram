@@ -7,12 +7,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -27,6 +29,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
@@ -37,6 +40,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -111,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         retryButton = findViewById(R.id.retryButton)
         updateBar = findViewById(R.id.updateBar)
         updateButton = findViewById(R.id.updateButton)
+        applyContentWidth()
 
         // Inset for system bars AND display cutouts, so nothing sits under a notch or under
         // the landscape navigation bar. The keyboard is folded into the bottom inset, otherwise
@@ -209,7 +215,8 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             allowFileAccess = true
             allowContentAccess = true
-            setSupportZoom(true)
+            // App, not a document: an accidental pinch leaves the whole layout zoomed and janky.
+            setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
             useWideViewPort = true
@@ -229,11 +236,6 @@ class MainActivity : AppCompatActivity() {
         // darkening algorithmically where the page has none.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, true)
-        }
-
-        // Rasterise just beyond the viewport so fast scrolling doesn't reveal blank tiles.
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.OFF_SCREEN_PRERASTER)) {
-            WebSettingsCompat.setOffscreenPreRaster(webView.settings, true)
         }
 
         installPageFilter()
@@ -386,16 +388,10 @@ class MainActivity : AppCompatActivity() {
                 hideError()
             }
 
-            // The page's first frame is ready: the earliest moment the loader can step aside,
-            // well before onPageFinished, which waits for every image on the feed.
-            override fun onPageCommitVisible(view: WebView?, url: String?) {
-                super.onPageCommitVisible(view, url)
-                hideLoadingOverlay()
-            }
-
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 fallbackFilterScript?.let { view?.evaluateJavascript(it, null) }
+                // Fallback for pages with no posts, or WebViews without the message bridge.
                 hideLoadingOverlay()
                 CookieManager.getInstance().flush()
             }
@@ -468,6 +464,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun installPageFilter() {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            // The filter posts "ready" once posts (or the login form) are on the page, so the
+            // loader hands straight over to content instead of to Instagram's own splash and
+            // skeleton. Only Instagram's origins get the bridge, and it can only do this.
+            WebViewCompat.addWebMessageListener(
+                webView,
+                BRIDGE_NAME,
+                INSTAGRAM_ORIGINS,
+                object : WebViewCompat.WebMessageListener {
+                    override fun onPostMessage(
+                        view: WebView,
+                        message: WebMessageCompat,
+                        sourceOrigin: Uri,
+                        isMainFrame: Boolean,
+                        replyProxy: JavaScriptReplyProxy
+                    ) {
+                        if (isMainFrame && message.data == "ready") hideLoadingOverlay()
+                    }
+                }
+            )
+        }
+
         val script = assets.open(FILTER_ASSET).bufferedReader().use { it.readText() }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             // Runs before Instagram's own scripts on every page, and keeps working across its
@@ -497,6 +515,28 @@ class MainActivity : AppCompatActivity() {
     private fun isOnFeed(url: String?): Boolean {
         val path = url?.let { Uri.parse(it).path }
         return path.isNullOrEmpty() || path == "/"
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyContentWidth()
+    }
+
+    /**
+     * Instagram's mobile site is laid out for phones. On a tablet its header and nav bar stretch
+     * edge to edge while posts sit in a centred column, and the story viewer anchors left with a
+     * dead strip beside it. A centred phone-width column keeps all of it aligned, and paints
+     * fewer pixels per frame.
+     */
+    private fun applyContentWidth() {
+        val params = webView.layoutParams as FrameLayout.LayoutParams
+        params.width = if (resources.configuration.screenWidthDp > MAX_CONTENT_WIDTH_DP) {
+            (MAX_CONTENT_WIDTH_DP * resources.displayMetrics.density).toInt()
+        } else {
+            ViewGroup.LayoutParams.MATCH_PARENT
+        }
+        params.gravity = Gravity.CENTER_HORIZONTAL
+        webView.layoutParams = params
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -530,9 +570,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        // Instagram's own chronological Following feed: only accounts you follow, no
-        // algorithmic recommendations. Far more reliable than hiding suggestions in the DOM.
-        const val DEFAULT_URL = "https://www.instagram.com/?variant=following"
+        // Home, not the "Following" view: only home carries the stories tray. Suggested posts
+        // and carousels on it are removed by the page filter (assets/cleangram.js).
+        const val DEFAULT_URL = "https://www.instagram.com/"
 
         fun isInstagramHost(host: String?): Boolean {
             if (host == null) return false
@@ -550,6 +590,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         private const val FILTER_ASSET = "cleangram.js"
+        private const val BRIDGE_NAME = "CleanGramBridge"
+        private const val MAX_CONTENT_WIDTH_DP = 600
         private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
 
         private const val LOAD_TIMEOUT_MS = 25_000L

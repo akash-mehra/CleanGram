@@ -2,27 +2,33 @@
 // in place before Instagram's own scripts and survives in-app (history.pushState) navigation.
 //
 // Design rules, learned the hard way:
-//  - Never hide a container. Hiding the nearest <section>/<div> took the whole feed and the
-//    stories tray with it. Only links, buttons and single posts are ever hidden.
-//  - Never scan the whole document per mutation. Work is batched into one pass per 250 ms
-//    and each pass only looks at elements it has not already checked.
+//  - Never hide a container that could hold someone's post, the feed, or the stories tray.
+//    Hiding the nearest <section> once took the whole feed and the stories tray with it.
+//  - Only look at what changed. Each pass inspects the nodes added since the last pass, and
+//    passes are batched to one per animation frame, so hidden content is gone before it is
+//    ever painted instead of popping in and then vanishing.
 (function () {
   'use strict';
   if (window.__cleangram) return;
   window.__cleangram = true;
 
-  var FEED = '/?variant=following';
-  var SEARCH = '/explore/search/';
   var STYLE_ID = 'cleangram-style';
 
   // The Reels tab. "/reels/" is plural; a followed account's reel post links to "/reel/<id>/"
-  // and must stay visible, as must usernames that merely start with "reels".
-  var CSS = 'a[href="/reels/"],a[href^="/reels/"],a[href^="/reels?"]{display:none!important}';
+  // and must stay visible, as must usernames that merely start with "reels". CSS hides the link
+  // from the very first paint; the pass below then collapses the slot it sat in.
+  var REELS_LINK = 'a[href="/reels/"],a[href^="/reels/"],a[href^="/reels?"]';
+  var CSS = REELS_LINK + '{display:none!important}';
 
   var APP_PROMPT = /^(open app|open in app|use the app|get the app|open instagram|use app)$/;
-  var SUGGESTED = /suggested (for you|posts|reels)/;
+  var SUGGESTED = /^suggested (for you|posts|reels|accounts)$/;
+  var SUGGESTED_IN_HEADER = /suggested (for you|posts|reels)/;
+  var CONTROL = 'a, button, [role="button"]';
+  // Anything that marks a region as someone's content: a post, a story ring, a story button.
+  var PROTECTED = 'article, canvas, [aria-label*="story" i], [aria-label*="Story"]';
 
-  var seen = typeof WeakSet === 'function' ? new WeakSet() : null;
+  var pending = [];
+  var readySent = false;
 
   function addStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -34,12 +40,24 @@
     root.appendChild(style);
   }
 
-  function signedIn() {
-    // ds_user_id is Instagram's script-readable signed-in marker. A password field means the
-    // login form is up. Only redirect the home route when both say "signed in", so the login
-    // screen can never be yanked away mid-typing.
-    return /(?:^|;\s*)ds_user_id=/.test(document.cookie) &&
-      !document.querySelector('input[type="password"]');
+  function hide(el) {
+    el.style.setProperty('display', 'none', 'important');
+  }
+
+  function textOf(el) {
+    return (el.textContent || '').trim().toLowerCase();
+  }
+
+  // Climb through wrappers that contain nothing but this element, so hiding it also collapses
+  // the slot it occupied (a nav bar keeps an empty gap otherwise). Stops at the first ancestor
+  // holding anything else, so nothing but the element itself can disappear.
+  function soleWrapper(el) {
+    var node = el;
+    while (node.parentElement && node.parentElement !== document.body &&
+        node.parentElement.childElementCount === 1) {
+      node = node.parentElement;
+    }
+    return node;
   }
 
   function redirect(target) {
@@ -57,73 +75,111 @@
   function guardRoute() {
     var path = location.pathname;
     if (path === '/reels' || path.indexOf('/reels/') === 0) {
-      redirect(FEED);
+      redirect('/');
     } else if (path === '/explore' || path === '/explore/') {
       // Keep people search, drop the recommendation grid.
-      redirect(SEARCH);
-    } else if (path === '/' && location.search.indexOf('variant=following') === -1 &&
-        document.readyState !== 'loading' && signedIn()) {
-      // The logo and home tab lead to the algorithmic "For you" feed. Wait for the page to
-      // parse first: at document start a login form's password field doesn't exist yet.
-      redirect(FEED);
+      redirect('/explore/search/');
     }
   }
 
-  function unseen(el) {
-    if (!seen) return true;
-    if (seen.has(el)) return false;
-    seen.add(el);
-    return true;
+  function checkPost(post) {
+    // Only the header is read: a caption that happens to say "suggested for you" must not
+    // hide someone's real post.
+    var header = post.querySelector('header');
+    if (header && SUGGESTED_IN_HEADER.test(textOf(header))) hide(post);
   }
 
-  function hideSuggestedPosts() {
-    var posts = document.querySelectorAll('article');
-    for (var i = 0; i < posts.length; i++) {
-      var post = posts[i];
-      if (seen && seen.has(post)) continue;
-      var header = post.querySelector('header');
-      if (!header) continue; // not rendered yet; look again next pass
-      unseen(post);
-      // Only the header is read: a caption that happens to say "suggested for you" must not
-      // hide someone's real post.
-      if (SUGGESTED.test((header.textContent || '').toLowerCase())) {
-        post.style.setProperty('display', 'none', 'important');
+  function checkControl(el) {
+    if (el.matches(REELS_LINK)) {
+      hide(soleWrapper(el));
+      return;
+    }
+    var text = textOf(el);
+    if (text.length < 20 && APP_PROMPT.test(text)) hide(soleWrapper(el));
+  }
+
+  // A "Suggested for you" heading outside a post heads a carousel of accounts to follow. Hide the
+  // smallest block holding the heading and a Follow button - and only if that block contains no
+  // post and no story, so it can never take the feed or the stories tray with it.
+  function checkHeading(el) {
+    if (el.childElementCount !== 0 || el.closest('article')) return;
+    if (!SUGGESTED.test(textOf(el))) return;
+    for (var node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+      var controls = node.querySelectorAll(CONTROL);
+      var hasFollow = false;
+      for (var i = 0; i < controls.length && !hasFollow; i++) {
+        hasFollow = textOf(controls[i]) === 'follow';
       }
+      if (!hasFollow) continue;
+      if (!node.querySelector(PROTECTED)) hide(node);
+      return;
     }
   }
 
-  function hideAppPrompts() {
-    var controls = document.querySelectorAll('a, button, [role="button"]');
-    for (var i = 0; i < controls.length; i++) {
-      var el = controls[i];
-      if (!unseen(el)) continue;
-      var text = (el.textContent || '').trim().toLowerCase();
-      if (text.length < 20 && APP_PROMPT.test(text)) {
-        el.style.setProperty('display', 'none', 'important');
-      }
-    }
+  function inspect(root) {
+    if (!root || root.nodeType !== 1 || !root.isConnected) return;
+
+    var post = root.closest('article');
+    if (post) checkPost(post);
+    var posts = root.querySelectorAll('article');
+    for (var i = 0; i < posts.length; i++) checkPost(posts[i]);
+
+    var control = root.closest(CONTROL);
+    if (control) checkControl(control);
+    var controls = root.querySelectorAll(CONTROL);
+    for (var j = 0; j < controls.length; j++) checkControl(controls[j]);
+
+    if (root.matches('span, h2, h3, h4, div')) checkHeading(root);
+    var headings = root.querySelectorAll('span, h2, h3, h4');
+    for (var k = 0; k < headings.length; k++) checkHeading(headings[k]);
+  }
+
+  // Tell the app when there is something real to look at, so its loading screen hands straight
+  // over to content rather than to Instagram's own splash and skeleton.
+  function signalReady() {
+    if (readySent || !document.querySelector('article, input[type="password"]')) return;
+    readySent = true;
+    var bridge = window.CleanGramBridge;
+    if (bridge && typeof bridge.postMessage === 'function') bridge.postMessage('ready');
   }
 
   function pass() {
     addStyle();
     guardRoute();
-    hideSuggestedPosts();
-    hideAppPrompts();
+    var roots = pending;
+    pending = [];
+    for (var i = 0; i < roots.length; i++) inspect(roots[i]);
+    signalReady();
   }
 
   var scheduled = false;
   function schedule() {
     if (scheduled) return;
     scheduled = true;
-    setTimeout(function () {
+    requestAnimationFrame(function () {
       scheduled = false;
       pass();
-    }, 250);
+    });
   }
 
   addStyle();
   guardRoute();
-  new MutationObserver(schedule).observe(document, { childList: true, subtree: true });
-  document.addEventListener('DOMContentLoaded', pass);
+  new MutationObserver(function (records) {
+    for (var i = 0; i < records.length; i++) {
+      var added = records[i].addedNodes;
+      for (var j = 0; j < added.length; j++) {
+        var node = added[j];
+        // Text arriving inside an existing element (React filling in a header) re-checks that
+        // element, not just brand-new elements.
+        pending.push(node.nodeType === 1 ? node : node.parentElement);
+      }
+    }
+    schedule();
+  }).observe(document, { childList: true, subtree: true });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    pending.push(document.documentElement);
+    pass();
+  });
   window.addEventListener('popstate', schedule);
 })();
