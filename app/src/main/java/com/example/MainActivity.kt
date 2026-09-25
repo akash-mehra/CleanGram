@@ -81,6 +81,10 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
             if (id != -1L && id == updateDownloadId) {
+                updateDownloadId = -1L
+                // Re-arm the button: if the install is cancelled or refused, tapping retries.
+                updateButton.isEnabled = true
+                updateButton.setText(R.string.update_action)
                 Updater.install(this@MainActivity, id)
             }
         }

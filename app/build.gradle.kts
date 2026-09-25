@@ -37,9 +37,25 @@ android {
         keyPassword = System.getenv("KEY_PASSWORD")
       }
     }
+    // The key every published build is signed with. Android installs an update only when its
+    // certificate matches the installed app's, so published builds must never fall back to a
+    // throwaway key. CI supplies it from repository secrets; it is absent locally.
+    create("published") {
+      val keystore = System.getenv("SIGNING_KEYSTORE_PATH")?.let { file(it) }
+      if (keystore != null && keystore.exists()) {
+        storeFile = keystore
+        storePassword = System.getenv("SIGNING_KEY_PASSWORD")
+        keyAlias = "cleangram"
+        keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+      }
+    }
   }
 
   buildTypes {
+    debug {
+      // The published key when CI provides it; AGP's local debug key otherwise.
+      signingConfigs.getByName("published").takeIf { it.storeFile != null }?.let { signingConfig = it }
+    }
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
