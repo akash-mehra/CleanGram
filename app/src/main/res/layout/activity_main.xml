@@ -7,6 +7,7 @@
 
     <WebView
         android:id="@+id/webView"
+        android:layout_marginTop="56dp"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:overScrollMode="never" />
@@ -14,6 +15,7 @@
     <!-- Thin loading progress indicator -->
     <ProgressBar
         android:id="@+id/progressBar"
+        android:layout_marginTop="56dp"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="3dp"
@@ -27,6 +29,7 @@
     <!-- Offline / Error fallback view -->
     <LinearLayout
         android:id="@+id/errorContainer"
+        android:layout_marginTop="56dp"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#121212"
@@ -81,6 +84,16 @@
         android:layout_margin="8dp"
         android:backgroundTint="#CC121212"
         android:text="@string/sound_off"
+        android:textColor="#FFFFFF" />
+
+    <Button
+        android:id="@+id/settingsButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:backgroundTint="#CC121212"
+        android:text="@string/settings"
         android:textColor="#FFFFFF" />
 
 </FrameLayout>

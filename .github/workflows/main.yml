@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      release_signed: ${{ steps.signing.outputs.available }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,3 +79,43 @@ jobs:
       - name: Remove signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/cleangram.jks"
+
+
+  publish-release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.release_signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: cleangram-release
+      cancel-in-progress: false
+    steps:
+      - name: Download signed APK
+        uses: actions/download-artifact@v4
+        with:
+          name: CleanGram-APK
+          path: release
+      - name: Publish update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_CODE: ${{ github.run_number }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="v$RELEASE_CODE"
+          # Reruns must not replace an already published update.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists."
+            exit 0
+          fi
+          cp release/app-release.apk "release/cleangram-$RELEASE_CODE.apk"
+          latest_tag=$(gh release view --json tagName --jq .tagName 2>/dev/null || true)
+          latest_flag=()
+          if [[ "$latest_tag" =~ ^v([0-9]+)$ ]] && (( BASH_REMATCH[1] > RELEASE_CODE )); then
+            latest_flag=(--latest=false)
+          fi
+          gh release create "$tag" "release/cleangram-$RELEASE_CODE.apk" \
+            --target "$RELEASE_COMMIT" --title "CleanGram 1.1.$RELEASE_CODE" \
+            --generate-notes "${latest_flag[@]}"

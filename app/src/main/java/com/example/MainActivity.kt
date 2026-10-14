@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var errorContainer: View
     private lateinit var retryButton: Button
 
+    private lateinit var updates: AppUpdates
     private lateinit var soundButton: Button
     private lateinit var fullscreenContainer: FrameLayout
     private var customView: View? = null
@@ -89,6 +90,9 @@ class MainActivity : AppCompatActivity() {
             view.setPadding(0, statusBars.top, 0, bottomInsets.bottom)
             insets
         }
+
+        updates = AppUpdates(this)
+        findViewById<Button>(R.id.settingsButton).setOnClickListener { updates.showSettings() }
 
         setupWebView()
         setupBackNavigation()
@@ -385,10 +389,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        updates.onResume()
         CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {
+        if (::updates.isInitialized) updates.close()
         if (::webView.isInitialized) {
             exitFullscreen()
             webView.stopLoading()
