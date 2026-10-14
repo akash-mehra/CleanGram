@@ -251,7 +251,7 @@ class MainActivity : AppCompatActivity() {
                 val urlString = uri.toString()
 
                 // Block or drop accidental direct navigation to Reels and redirect back to main Instagram feed
-                if (isReelsUrl(urlString)) {
+                if (isDistractionUrl(urlString)) {
                     view?.loadUrl(DEFAULT_URL)
                     return true
                 }
@@ -278,6 +278,10 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                if (url != null && isDistractionUrl(url)) {
+                    view?.loadUrl(DEFAULT_URL)
+                    return
+                }
                 errorContainer.visibility = View.GONE
                 webView.visibility = View.VISIBLE
                 injectDistractionFreeScript(view)
@@ -412,6 +416,13 @@ class MainActivity : AppCompatActivity() {
             return path == "/reels" || path?.startsWith("/reels/") == true
         }
 
+        fun isDistractionUrl(url: String): Boolean {
+            val uri = Uri.parse(url)
+            if (!isInstagramHost(uri.host?.lowercase(Locale.ROOT))) return false
+            val path = uri.path?.lowercase(Locale.ROOT)?.trimEnd('/')
+            return isReelsUrl(url) || path == "/explore" || path?.startsWith("/explore/") == true
+        }
+
         /**
          * Robust, reusable distraction-free injection script.
          * Injects custom CSS rules and uses a lightweight MutationObserver
@@ -424,24 +435,24 @@ class MainActivity : AppCompatActivity() {
 
                 const customCss = `
                     /* 1. Hide Reels navigation tabs, shortcuts, and floating action buttons */
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels/"],
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels"],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="reels" i],
+                    a[href*="/reels/"],
+                    a[href*="/reels"],
+                    svg[aria-label*="Reels" i],
+                    svg[aria-label*="reels" i],
+                    [aria-label*="Reels" i],
+                    [data-testid*="reels" i],
 
                     /* 2. Hide Explore / Search discovery feeds */
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore/"],
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore"],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="explore" i],
+                    a[href*="/explore/"],
+                    a[href*="/explore"],
+                    svg[aria-label*="Explore" i],
+                    svg[aria-label*="explore" i],
+                    [aria-label*="Explore" i],
+                    [data-testid*="explore" i],
 
                     /* 3. Hide algorithmic suggestion elements and containers in feed */
-                    main [data-testid*="suggested" i],
-                    main div[data-testid*="suggestion" i] {
+                    html[data-cleangram-home] [data-testid*="suggested" i],
+                    html[data-cleangram-home] div[data-testid*="suggestion" i] {
                         display: none !important;
                         visibility: hidden !important;
                         pointer-events: none !important;
@@ -466,6 +477,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 function removeDistractionNodes() {
+                    if (document.documentElement) {
+                        document.documentElement.toggleAttribute('data-cleangram-home', location.pathname === '/');
+                    }
+                    enforceRoute();
                     // Hide parent containers for Reels & Explore navigation items
                     const targetSelectors = [
                         'a[href*="/reels/"]',
@@ -477,8 +492,7 @@ class MainActivity : AppCompatActivity() {
                     ];
 
                     document.querySelectorAll(targetSelectors.join(',')).forEach(function(el) {
-                        if (!el.closest('nav, [role="navigation"], [role="tablist"]')) return;
-                        const navParent = el.closest('li, [role="tab"], [role="menuitem"]');
+                        const navParent = el.closest('a, button, [role="link"], [role="button"], [role="tab"], [role="menuitem"]');
                         if (navParent && navParent !== document.body && navParent !== document.documentElement) {
                             navParent.style.setProperty('display', 'none', 'important');
                             navParent.style.setProperty('visibility', 'hidden', 'important');
@@ -498,19 +512,66 @@ class MainActivity : AppCompatActivity() {
                     ];
 
                     if (location.pathname !== '/') return;
-                    const textNodes = document.querySelectorAll('main span, main p, main h2, main h3, main h4');
+                    // Reels embedded in the home feed are distractions too; DM
+                    // attachments and an explicitly opened shared post stay intact.
+                    document.querySelectorAll('a[href*="/reel/"]').forEach(function(link) {
+                        const post = link.closest('article');
+                        if (post) post.style.setProperty('display', 'none', 'important');
+                    });
+                    const textNodes = document.querySelectorAll('span, p, h2, h3, h4, div');
                     textNodes.forEach(function(node) {
                         if (node.children.length === 0 && node.textContent) {
                             const trimmedText = node.textContent.trim().toLowerCase();
                             if (suggestionKeywords.some(function(keyword) { return trimmedText.includes(keyword); })) {
-                                const feedContainer = node.closest('article, section');
+                                const feedContainer = node.closest('article, section, div[data-testid], div[role="presentation"]');
                                 if (feedContainer && feedContainer !== document.body && feedContainer !== document.documentElement) {
                                     feedContainer.style.setProperty('display', 'none', 'important');
                                     feedContainer.style.setProperty('visibility', 'hidden', 'important');
+                                } else if (node.parentElement && node.parentElement !== document.body) {
+                                    node.parentElement.style.setProperty('display', 'none', 'important');
                                 }
                             }
                         }
                     });
+                }
+
+
+                function blockedRoute(url) {
+                    try {
+                        const parsed = new URL(url, location.href);
+                        if (parsed.origin !== location.origin) return false;
+                        return /^\/(reels|explore)(\/|$)/i.test(parsed.pathname);
+                    } catch (_) { return false; }
+                }
+
+                function enforceRoute() {
+                    if (blockedRoute(location.href)) location.replace('/');
+                }
+
+                // Instagram changes routes without loading a new document.
+                if (!window.__cleangramRouteGuard) {
+                    window.__cleangramRouteGuard = true;
+                    ['pushState', 'replaceState'].forEach(function(method) {
+                        const original = history[method];
+                        history[method] = function(state, title, url) {
+                            if (url != null && blockedRoute(url)) {
+                                enforceRoute();
+                                return;
+                            }
+                            const result = original.apply(this, arguments);
+                            removeDistractionNodes();
+                            return result;
+                        };
+                    });
+                    document.addEventListener('click', function(event) {
+                        const link = event.target.closest && event.target.closest('a[href]');
+                        if (link && blockedRoute(link.href)) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    }, true);
+                    window.addEventListener('popstate', removeDistractionNodes);
+                    window.addEventListener('hashchange', removeDistractionNodes);
                 }
 
                 // Initial injection

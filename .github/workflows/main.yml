@@ -27,6 +27,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '9.3.1'
+      - name: Test distraction filters
+        run: node --test scripts/test-distraction-filter.cjs
       - name: Test
         run: gradle testDebugUnitTest --stacktrace
       - name: Check release signing configuration
