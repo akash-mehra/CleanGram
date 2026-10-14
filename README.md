@@ -17,7 +17,7 @@ gradle testDebugUnitTest
 gradle assembleDebug
 ```
 
-Debug APKs from different machines may have different signing certificates. Use signed release APKs for regular installs and updates.
+CI produces `CleanGram-Preview-APK` when release signing secrets are missing, so builds and UI testing remain available. Preview APKs are debug-signed and are not guaranteed to update your existing install or preserve its login. Once all four signing secrets are configured, CI instead produces `CleanGram-APK`, signed with the permanent release key.\n\nDebug APKs from different machines may have different signing certificates. Use signed release APKs for regular installs and updates.
 
 ## Updates that preserve login
 
