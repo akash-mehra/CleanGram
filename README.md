@@ -17,7 +17,9 @@ gradle testDebugUnitTest
 gradle assembleDebug
 ```
 
-CI produces `CleanGram-Preview-APK` when release signing secrets are missing, so builds and UI testing remain available. Preview APKs are debug-signed and are not guaranteed to update your existing install or preserve its login. Once all four signing secrets are configured, CI instead produces `CleanGram-APK`, signed with the permanent release key.\n\nDebug APKs from different machines may have different signing certificates. Use signed release APKs for regular installs and updates.
+CI produces `CleanGram-Preview-APK` when release signing secrets are missing, so builds and UI testing remain available. Preview APKs are debug-signed and are not guaranteed to update your existing install or preserve its login. Once all four signing secrets are configured, CI instead produces `CleanGram-APK`, signed with the permanent release key.
+
+Debug APKs from different machines may have different signing certificates. Use signed release APKs for regular installs and updates.
 
 ## Updates that preserve login
 
@@ -48,3 +50,16 @@ If the installed APK's original signing key exists, reuse it (including its alia
 3. Enter/exit fullscreen if Instagram offers it.
 4. Install a second release APK signed with the same key and a greater version code over the first. Confirm Instagram remains logged in.
 5. Verify Reels-feed and Explore navigation remain hidden and direct Reels-feed navigation returns home.
+
+
+## In-app updates
+
+Settings > Check for updates checks the latest published GitHub release. Automatic checks are enabled by default and run when the app becomes active, at most once per 24 hours; disable them in Settings. A popup offers Download update or Later. This is a foreground popup, not a notification delivered while the app is closed.
+
+After downloading, CleanGram verifies the exact size, GitHub SHA-256 digest, application ID, higher version code and matching signing certificate. Android asks for installation approval. On Android 8+, allow CleanGram to install apps when directed to Android settings, then return to confirm installation. No storage permission is required. Cancelled downloads are removed; completed downloads can be installed again through Settings. If the app is closed during a download, retry from Settings.
+
+Signed builds on main automatically publish a GitHub release with a `v<versionCode>` tag and `cleangram-<versionCode>.apk` asset. Branch/PR builds never publish releases. The updater ignores drafts, prereleases, preview APKs, older versions, and assets missing a valid SHA-256 digest. Before the first release, it reports no newer published release. Releases keep the permanent signing key; changing the key will cause verification to reject the APK.
+
+The first updater-enabled version must be installed manually over the existing signed app. Later published releases can be installed through the app. Android still requires the user's confirmation; updates never silently install or require uninstalling the app.
+
+Updater device checks: manual checks with no release/equal/newer version, offline/rate-limit responses, Later/automatic checks off, download cancel, installer permission denied/granted, install cancel/retry, and an in-place upgrade retaining Instagram login.

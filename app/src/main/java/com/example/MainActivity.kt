@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var errorContainer: View
     private lateinit var retryButton: Button
 
+    private lateinit var updates: AppUpdates
     private lateinit var soundButton: Button
     private lateinit var fullscreenContainer: FrameLayout
     private var customView: View? = null
@@ -89,6 +90,9 @@ class MainActivity : AppCompatActivity() {
             view.setPadding(0, statusBars.top, 0, bottomInsets.bottom)
             insets
         }
+
+        updates = AppUpdates(this)
+        findViewById<Button>(R.id.settingsButton).setOnClickListener { updates.showSettings() }
 
         setupWebView()
         setupBackNavigation()
@@ -251,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                 val urlString = uri.toString()
 
                 // Block or drop accidental direct navigation to Reels and redirect back to main Instagram feed
-                if (isReelsUrl(urlString)) {
+                if (isDistractionUrl(urlString)) {
                     view?.loadUrl(DEFAULT_URL)
                     return true
                 }
@@ -278,6 +282,10 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                if (url != null && isDistractionUrl(url)) {
+                    view?.loadUrl(DEFAULT_URL)
+                    return
+                }
                 errorContainer.visibility = View.GONE
                 webView.visibility = View.VISIBLE
                 injectDistractionFreeScript(view)
@@ -381,10 +389,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        updates.onResume()
         CookieManager.getInstance().flush()
     }
 
     override fun onDestroy() {
+        if (::updates.isInitialized) updates.close()
         if (::webView.isInitialized) {
             exitFullscreen()
             webView.stopLoading()
@@ -412,6 +422,13 @@ class MainActivity : AppCompatActivity() {
             return path == "/reels" || path?.startsWith("/reels/") == true
         }
 
+        fun isDistractionUrl(url: String): Boolean {
+            val uri = Uri.parse(url)
+            if (!isInstagramHost(uri.host?.lowercase(Locale.ROOT))) return false
+            val path = uri.path?.lowercase(Locale.ROOT)?.trimEnd('/')
+            return isReelsUrl(url) || path == "/explore" || path?.startsWith("/explore/") == true
+        }
+
         /**
          * Robust, reusable distraction-free injection script.
          * Injects custom CSS rules and uses a lightweight MutationObserver
@@ -423,32 +440,16 @@ class MainActivity : AppCompatActivity() {
                 const SCRIPT_INIT_KEY = '__cleangram_observer_active__';
 
                 const customCss = `
-                    /* 1. Hide Reels navigation tabs, shortcuts, and floating action buttons */
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels/"],
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels"],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Reels" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="reels" i],
-
-                    /* 2. Hide Explore / Search discovery feeds */
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore/"],
-                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore"],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Explore" i],
-                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="explore" i],
-
-                    /* 3. Hide algorithmic suggestion elements and containers in feed */
-                    main [data-testid*="suggested" i],
-                    main div[data-testid*="suggestion" i] {
+                    /* Target discovery links/icons, never generic feed containers. */
+                    a[href="/reels"], a[href^="/reels/"],
+                    a[href="/explore"], a[href^="/explore/"],
+                    a[href^="https://www.instagram.com/reels/"],
+                    a[href^="https://www.instagram.com/explore/"],
+                    svg[aria-label="Reels" i],
+                    svg[aria-label="Explore" i],
+                    button[aria-label="Reels" i],
+                    button[aria-label="Explore" i] {
                         display: none !important;
-                        visibility: hidden !important;
-                        pointer-events: none !important;
-                        height: 0 !important;
-                        max-height: 0 !important;
-                        opacity: 0 !important;
-                        overflow: hidden !important;
                     }
                 `;
 
@@ -466,19 +467,22 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 function removeDistractionNodes() {
+                    if (document.documentElement) {
+                        document.documentElement.toggleAttribute('data-cleangram-home', location.pathname === '/');
+                    }
+                    enforceRoute();
                     // Hide parent containers for Reels & Explore navigation items
                     const targetSelectors = [
-                        'a[href*="/reels/"]',
-                        'a[href*="/reels"]',
-                        'a[href*="/explore/"]',
-                        'a[href*="/explore"]',
-                        'svg[aria-label*="Reels" i]',
-                        'svg[aria-label*="Explore" i]'
+                        'a[href="/reels"], a[href^="/reels/"]',
+                        'a[href="/explore"], a[href^="/explore/"]',
+                        'a[href^="https://www.instagram.com/reels/"]',
+                        'a[href^="https://www.instagram.com/explore/"]',
+                        'svg[aria-label="Reels" i]',
+                        'svg[aria-label="Explore" i]'
                     ];
 
                     document.querySelectorAll(targetSelectors.join(',')).forEach(function(el) {
-                        if (!el.closest('nav, [role="navigation"], [role="tablist"]')) return;
-                        const navParent = el.closest('li, [role="tab"], [role="menuitem"]');
+                        const navParent = el.closest('a, button, [role="link"], [role="button"], [role="tab"], [role="menuitem"]');
                         if (navParent && navParent !== document.body && navParent !== document.documentElement) {
                             navParent.style.setProperty('display', 'none', 'important');
                             navParent.style.setProperty('visibility', 'hidden', 'important');
@@ -498,19 +502,63 @@ class MainActivity : AppCompatActivity() {
                     ];
 
                     if (location.pathname !== '/') return;
-                    const textNodes = document.querySelectorAll('main span, main p, main h2, main h3, main h4');
+                    // A Reel permalink can belong to a followed-account post.
+                    // Keep these posts; block the discovery feed via its route instead.
+                    const textNodes = document.querySelectorAll('span, p, h2, h3, h4, div');
                     textNodes.forEach(function(node) {
                         if (node.children.length === 0 && node.textContent) {
                             const trimmedText = node.textContent.trim().toLowerCase();
-                            if (suggestionKeywords.some(function(keyword) { return trimmedText.includes(keyword); })) {
-                                const feedContainer = node.closest('article, section');
-                                if (feedContainer && feedContainer !== document.body && feedContainer !== document.documentElement) {
-                                    feedContainer.style.setProperty('display', 'none', 'important');
-                                    feedContainer.style.setProperty('visibility', 'hidden', 'important');
+                            if (suggestionKeywords.includes(trimmedText)) {
+                                // Only hide a single semantic post, never section,
+                                // presentation wrappers, or the heading's parent.
+                                const post = node.closest('article');
+                                if (post && !post.querySelector('article') &&
+                                    !post.querySelector('nav, main, [role="main"], [role="navigation"]')) {
+                                    post.style.setProperty('display', 'none', 'important');
                                 }
+
                             }
                         }
                     });
+                }
+
+
+                function blockedRoute(url) {
+                    try {
+                        const parsed = new URL(url, location.href);
+                        if (parsed.origin !== location.origin) return false;
+                        return /^\/(reels|explore)(\/|$)/i.test(parsed.pathname);
+                    } catch (_) { return false; }
+                }
+
+                function enforceRoute() {
+                    if (blockedRoute(location.href)) location.replace('/');
+                }
+
+                // Instagram changes routes without loading a new document.
+                if (!window.__cleangramRouteGuard) {
+                    window.__cleangramRouteGuard = true;
+                    ['pushState', 'replaceState'].forEach(function(method) {
+                        const original = history[method];
+                        history[method] = function(state, title, url) {
+                            if (url != null && blockedRoute(url)) {
+                                enforceRoute();
+                                return;
+                            }
+                            const result = original.apply(this, arguments);
+                            removeDistractionNodes();
+                            return result;
+                        };
+                    });
+                    document.addEventListener('click', function(event) {
+                        const link = event.target.closest && event.target.closest('a[href]');
+                        if (link && blockedRoute(link.href)) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    }, true);
+                    window.addEventListener('popstate', removeDistractionNodes);
+                    window.addEventListener('hashchange', removeDistractionNodes);
                 }
 
                 // Initial injection
