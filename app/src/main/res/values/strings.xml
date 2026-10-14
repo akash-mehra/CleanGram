@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">CleanGram</string>
+    <string name="sound_off">Sound off</string>
+    <string name="sound_on">Sound on</string>
+    <string name="unmute_video">Turn video sound on</string>
+    <string name="mute_video">Turn video sound off</string>
 </resources>

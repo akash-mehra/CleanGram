@@ -22,7 +22,10 @@ class ExampleRobolectricTest {
   @Test
   fun `verify reels url detection`() {
     assertEquals(true, MainActivity.isReelsUrl("https://www.instagram.com/reels/"))
-    assertEquals(true, MainActivity.isReelsUrl("https://www.instagram.com/reel/12345/"))
+    assertEquals(false, MainActivity.isReelsUrl("https://www.instagram.com/reel/12345/"))
+    assertEquals(true, MainActivity.isReelsUrl("https://www.instagram.com/reels/?source=nav"))
+    assertEquals(false, MainActivity.isReelsUrl("https://example.com/reels/"))
+    assertEquals(false, MainActivity.isReelsUrl("https://www.instagram.com/direct/t/123/?next=/reels/"))
     assertEquals(false, MainActivity.isReelsUrl("https://www.instagram.com/"))
   }
 
