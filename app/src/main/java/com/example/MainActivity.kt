@@ -21,6 +21,8 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.FrameLayout
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +38,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: View
     private lateinit var retryButton: Button
+
+    private lateinit var soundButton: Button
+    private lateinit var fullscreenContainer: FrameLayout
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var muted = true
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
 
@@ -63,12 +71,22 @@ class MainActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
         retryButton = findViewById(R.id.retryButton)
+        soundButton = findViewById(R.id.soundButton)
+        fullscreenContainer = findViewById(R.id.fullscreenContainer)
+        muted = getPreferences(MODE_PRIVATE).getBoolean("muted", true)
+        updateSoundButton()
+        soundButton.setOnClickListener {
+            muted = !muted
+            getPreferences(MODE_PRIVATE).edit().putBoolean("muted", muted).apply()
+            updateSoundButton()
+            applySoundPreference()
+        }
 
         // Handle edge-to-edge window insets cleanly
         ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { view, insets ->
             val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
-            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            view.setPadding(0, statusBars.top, 0, navBars.bottom)
+            val bottomInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.ime())
+            view.setPadding(0, statusBars.top, 0, bottomInsets.bottom)
             insets
         }
 
@@ -82,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState)
+            if (webView.restoreState(savedInstanceState) == null) webView.loadUrl(DEFAULT_URL)
         } else {
             webView.loadUrl(DEFAULT_URL)
         }
@@ -108,13 +126,32 @@ class MainActivity : AppCompatActivity() {
             builtInZoomControls = false
             displayZoomControls = false
             useWideViewPort = true
-            loadWithOverviewMode = true
+            loadWithOverviewMode = false
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
         // 3. WebChromeClient for file uploads, photo pickers, alerts, and progress
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null || customView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                customView = view
+                customViewCallback = callback
+                fullscreenContainer.addView(view, FrameLayout.LayoutParams(-1, -1))
+                fullscreenContainer.visibility = View.VISIBLE
+                webView.visibility = View.GONE
+                soundButton.bringToFront()
+                WindowInsetsControllerCompat(window, fullscreenContainer).apply {
+                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    hide(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+
+            override fun onHideCustomView() = exitFullscreen()
+
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress < 100) {
                     progressBar.visibility = View.VISIBLE
@@ -267,13 +304,60 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectDistractionFreeScript(view: WebView?) {
+        val host = view?.url?.let { Uri.parse(it).host }?.lowercase(Locale.ROOT)
+        if (!isInstagramHost(host)) return
         view?.evaluateJavascript(DISTRACTION_FREE_INJECTION_JS, null)
+        applySoundPreference()
+    }
+
+    private fun updateSoundButton() {
+        soundButton.setText(if (muted) R.string.sound_off else R.string.sound_on)
+        soundButton.contentDescription = getString(if (muted) R.string.unmute_video else R.string.mute_video)
+    }
+
+    private fun applySoundPreference() {
+        webView.evaluateJavascript("""
+            (function() {
+                window.__cleangramMuted = $muted;
+                function applySound() {
+                    document.querySelectorAll('video, audio').forEach(function(media) {
+                        media.muted = window.__cleangramMuted;
+                    });
+                }
+                applySound();
+                if (!window.__cleangramSoundInstalled) {
+                    window.__cleangramSoundInstalled = true;
+                    document.addEventListener('play', applySound, true);
+                    document.addEventListener('volumechange', function(event) {
+                        const media = event.target;
+                        if (media.matches && media.matches('video, audio') && media.muted !== window.__cleangramMuted) {
+                            media.muted = window.__cleangramMuted;
+                        }
+                    }, true);
+                    new MutationObserver(applySound).observe(document.documentElement, {childList: true, subtree: true});
+                }
+            })();
+        """.trimIndent(), null)
+    }
+
+    private fun exitFullscreen() {
+        if (customView == null) return
+        fullscreenContainer.removeAllViews()
+        fullscreenContainer.visibility = View.GONE
+        customView = null
+        webView.visibility = View.VISIBLE
+        val callback = customViewCallback
+        customViewCallback = null
+        WindowInsetsControllerCompat(window, webView).show(WindowInsetsCompat.Type.systemBars())
+        callback?.onCustomViewHidden()
     }
 
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
+                if (customView != null) {
+                    exitFullscreen()
+                } else if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     isEnabled = false
@@ -302,6 +386,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (::webView.isInitialized) {
+            exitFullscreen()
             webView.stopLoading()
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.destroy()
@@ -321,10 +406,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         fun isReelsUrl(url: String): Boolean {
-            val lower = url.lowercase(Locale.ROOT)
-            return lower.contains("/reels/") ||
-                lower.endsWith("/reels") ||
-                lower.contains("/reel/")
+            val uri = Uri.parse(url)
+            if (!isInstagramHost(uri.host?.lowercase(Locale.ROOT))) return false
+            val path = uri.path?.lowercase(Locale.ROOT)?.trimEnd('/')
+            return path == "/reels" || path?.startsWith("/reels/") == true
         }
 
         /**
@@ -339,25 +424,24 @@ class MainActivity : AppCompatActivity() {
 
                 const customCss = `
                     /* 1. Hide Reels navigation tabs, shortcuts, and floating action buttons */
-                    a[href*="/reels/"],
-                    a[href*="/reels"],
-                    a[href*="/reel/"],
-                    svg[aria-label*="Reels" i],
-                    svg[aria-label*="reels" i],
-                    [aria-label*="Reels" i],
-                    [data-testid*="reels" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels/"],
+                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/reels"],
+                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Reels" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="reels" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Reels" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="reels" i],
 
                     /* 2. Hide Explore / Search discovery feeds */
-                    a[href*="/explore/"],
-                    a[href*="/explore"],
-                    svg[aria-label*="Explore" i],
-                    svg[aria-label*="explore" i],
-                    [aria-label*="Explore" i],
-                    [data-testid*="explore" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore/"],
+                    :is(nav, [role="navigation"], [role="tablist"]) a[href*="/explore"],
+                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="Explore" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) svg[aria-label*="explore" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) [aria-label*="Explore" i],
+                    :is(nav, [role="navigation"], [role="tablist"]) [data-testid*="explore" i],
 
                     /* 3. Hide algorithmic suggestion elements and containers in feed */
-                    [data-testid*="suggested" i],
-                    div[data-testid*="suggestion" i] {
+                    main [data-testid*="suggested" i],
+                    main div[data-testid*="suggestion" i] {
                         display: none !important;
                         visibility: hidden !important;
                         pointer-events: none !important;
@@ -386,7 +470,6 @@ class MainActivity : AppCompatActivity() {
                     const targetSelectors = [
                         'a[href*="/reels/"]',
                         'a[href*="/reels"]',
-                        'a[href*="/reel/"]',
                         'a[href*="/explore/"]',
                         'a[href*="/explore"]',
                         'svg[aria-label*="Reels" i]',
@@ -394,7 +477,8 @@ class MainActivity : AppCompatActivity() {
                     ];
 
                     document.querySelectorAll(targetSelectors.join(',')).forEach(function(el) {
-                        const navParent = el.closest('li, [role="tab"], [role="menuitem"], div[class*="nav"], div[class*="Nav"]');
+                        if (!el.closest('nav, [role="navigation"], [role="tablist"]')) return;
+                        const navParent = el.closest('li, [role="tab"], [role="menuitem"]');
                         if (navParent && navParent !== document.body && navParent !== document.documentElement) {
                             navParent.style.setProperty('display', 'none', 'important');
                             navParent.style.setProperty('visibility', 'hidden', 'important');
@@ -413,17 +497,16 @@ class MainActivity : AppCompatActivity() {
                         'suggested reels'
                     ];
 
-                    const textNodes = document.querySelectorAll('span, p, h2, h3, h4, div');
+                    if (location.pathname !== '/') return;
+                    const textNodes = document.querySelectorAll('main span, main p, main h2, main h3, main h4');
                     textNodes.forEach(function(node) {
                         if (node.children.length === 0 && node.textContent) {
                             const trimmedText = node.textContent.trim().toLowerCase();
                             if (suggestionKeywords.some(function(keyword) { return trimmedText.includes(keyword); })) {
-                                const feedContainer = node.closest('article, section, div[data-testid], div[role="presentation"]');
+                                const feedContainer = node.closest('article, section');
                                 if (feedContainer && feedContainer !== document.body && feedContainer !== document.documentElement) {
                                     feedContainer.style.setProperty('display', 'none', 'important');
                                     feedContainer.style.setProperty('visibility', 'hidden', 'important');
-                                } else if (node.parentElement) {
-                                    node.parentElement.style.setProperty('display', 'none', 'important');
                                 }
                             }
                         }
@@ -437,9 +520,15 @@ class MainActivity : AppCompatActivity() {
                 // Setup MutationObserver to continuously hide dynamically rendered items as user scrolls
                 if (!window[SCRIPT_INIT_KEY]) {
                     window[SCRIPT_INIT_KEY] = true;
-                    const observer = new MutationObserver(function(mutations) {
-                        injectCSS();
-                        removeDistractionNodes();
+                    let pending = false;
+                    const observer = new MutationObserver(function() {
+                        if (pending) return;
+                        pending = true;
+                        requestAnimationFrame(function() {
+                            pending = false;
+                            injectCSS();
+                            removeDistractionNodes();
+                        });
                     });
 
                     const target = document.documentElement || document.body;

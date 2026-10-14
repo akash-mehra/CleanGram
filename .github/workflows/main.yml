@@ -5,39 +5,73 @@ on:
     branches: [ "**" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
+        with:
+          packages: platform-tools
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '9.3.1'
-
-      - name: Build Debug APK
+      - name: Test
+        run: gradle testDebugUnitTest --stacktrace
+      - name: Check release signing configuration
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace
-          else
-            gradle assembleDebug --stacktrace
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::notice::Release signing is not configured. Building a preview APK; see README.md for update signing setup."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-
-      - name: Upload APK
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cleangram.jks"
+      - name: Build signed update APK
+        if: steps.signing.outputs.available == 'true'
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/cleangram.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.1.${{ github.run_number }}
+        run: gradle assembleRelease --stacktrace
+      - name: Build preview APK
+        if: steps.signing.outputs.available != 'true'
+        run: gradle assembleDebug --stacktrace
+      - name: Upload signed update APK
+        if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: CleanGram-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/release/*-release.apk
+          if-no-files-found: error
+      - name: Upload preview APK
+        if: steps.signing.outputs.available != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanGram-Preview-APK
+          path: app/build/outputs/apk/debug/*-debug.apk
+          if-no-files-found: error
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cleangram.jks"

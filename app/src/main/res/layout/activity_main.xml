@@ -66,4 +66,21 @@
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
+    <FrameLayout
+        android:id="@+id/fullscreenContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/soundButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:backgroundTint="#CC121212"
+        android:text="@string/sound_off"
+        android:textColor="#FFFFFF" />
+
 </FrameLayout>

@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.cleangram.kfqvx"
     minSdk = 24
     targetSdk = 35
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = providers.environmentVariable("VERSION_CODE").orElse("2").get().toInt()
+    versionName = providers.environmentVariable("VERSION_NAME").orElse("1.1").get()
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -31,7 +31,7 @@ android {
       if (keystore.exists()) {
         storeFile = keystore
         storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = "upload"
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
         keyPassword = System.getenv("KEY_PASSWORD")
       }
     }
