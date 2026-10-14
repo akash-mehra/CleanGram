@@ -60,7 +60,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
     }
 
     private fun checkForUpdates(manual: Boolean) {
-        if (checking || downloading?.isActive == true || prompt?.isShowing == true) {
+        if (checking || downloading?.isCompleted == false || prompt?.isShowing == true) {
             if (manual) message("An update check or download is already in progress")
             return
         }
@@ -94,7 +94,8 @@ class AppUpdates(private val activity: AppCompatActivity) {
                         }
                     } finally { connection.disconnect() }
                 }
-                if (activity.isFinishing || activity.isDestroyed) return@launch
+                if (activity.isFinishing || activity.isDestroyed ||
+                    !activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return@launch
                 if (release == null) {
                     if (manual) message("You’re up to date. No newer published release is available.")
                 } else {
@@ -113,7 +114,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
     }
 
     private fun download(release: UpdateRelease) {
-        if (downloading?.isActive == true) return
+        if (downloading?.isCompleted == false) return
         val progress = AlertDialog.Builder(activity).setTitle("Downloading update")
             .setMessage("Please keep CleanGram open while the APK downloads.")
             .setNegativeButton("Cancel") { _, _ -> downloading?.cancel() }
@@ -123,7 +124,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
             try {
                 withContext(Dispatchers.IO) {
                     apk.parentFile!!.mkdirs()
-                    val partial = File(apk.parentFile, "download.part")
+                    val partial = File(apk.parentFile, "download.apk")
                     try {
                         val connection = open(release.url)
                         try {
