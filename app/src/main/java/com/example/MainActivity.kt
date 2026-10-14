@@ -434,32 +434,16 @@ class MainActivity : AppCompatActivity() {
                 const SCRIPT_INIT_KEY = '__cleangram_observer_active__';
 
                 const customCss = `
-                    /* 1. Hide Reels navigation tabs, shortcuts, and floating action buttons */
-                    a[href*="/reels/"],
-                    a[href*="/reels"],
-                    svg[aria-label*="Reels" i],
-                    svg[aria-label*="reels" i],
-                    [aria-label*="Reels" i],
-                    [data-testid*="reels" i],
-
-                    /* 2. Hide Explore / Search discovery feeds */
-                    a[href*="/explore/"],
-                    a[href*="/explore"],
-                    svg[aria-label*="Explore" i],
-                    svg[aria-label*="explore" i],
-                    [aria-label*="Explore" i],
-                    [data-testid*="explore" i],
-
-                    /* 3. Hide algorithmic suggestion elements and containers in feed */
-                    html[data-cleangram-home] [data-testid*="suggested" i],
-                    html[data-cleangram-home] div[data-testid*="suggestion" i] {
+                    /* Target discovery links/icons, never generic feed containers. */
+                    a[href="/reels"], a[href^="/reels/"],
+                    a[href="/explore"], a[href^="/explore/"],
+                    a[href^="https://www.instagram.com/reels/"],
+                    a[href^="https://www.instagram.com/explore/"],
+                    svg[aria-label="Reels" i],
+                    svg[aria-label="Explore" i],
+                    button[aria-label="Reels" i],
+                    button[aria-label="Explore" i] {
                         display: none !important;
-                        visibility: hidden !important;
-                        pointer-events: none !important;
-                        height: 0 !important;
-                        max-height: 0 !important;
-                        opacity: 0 !important;
-                        overflow: hidden !important;
                     }
                 `;
 
@@ -483,12 +467,12 @@ class MainActivity : AppCompatActivity() {
                     enforceRoute();
                     // Hide parent containers for Reels & Explore navigation items
                     const targetSelectors = [
-                        'a[href*="/reels/"]',
-                        'a[href*="/reels"]',
-                        'a[href*="/explore/"]',
-                        'a[href*="/explore"]',
-                        'svg[aria-label*="Reels" i]',
-                        'svg[aria-label*="Explore" i]'
+                        'a[href="/reels"], a[href^="/reels/"]',
+                        'a[href="/explore"], a[href^="/explore/"]',
+                        'a[href^="https://www.instagram.com/reels/"]',
+                        'a[href^="https://www.instagram.com/explore/"]',
+                        'svg[aria-label="Reels" i]',
+                        'svg[aria-label="Explore" i]'
                     ];
 
                     document.querySelectorAll(targetSelectors.join(',')).forEach(function(el) {
@@ -512,24 +496,21 @@ class MainActivity : AppCompatActivity() {
                     ];
 
                     if (location.pathname !== '/') return;
-                    // Reels embedded in the home feed are distractions too; DM
-                    // attachments and an explicitly opened shared post stay intact.
-                    document.querySelectorAll('a[href*="/reel/"]').forEach(function(link) {
-                        const post = link.closest('article');
-                        if (post) post.style.setProperty('display', 'none', 'important');
-                    });
+                    // A Reel permalink can belong to a followed-account post.
+                    // Keep these posts; block the discovery feed via its route instead.
                     const textNodes = document.querySelectorAll('span, p, h2, h3, h4, div');
                     textNodes.forEach(function(node) {
                         if (node.children.length === 0 && node.textContent) {
                             const trimmedText = node.textContent.trim().toLowerCase();
-                            if (suggestionKeywords.some(function(keyword) { return trimmedText.includes(keyword); })) {
-                                const feedContainer = node.closest('article, section, div[data-testid], div[role="presentation"]');
-                                if (feedContainer && feedContainer !== document.body && feedContainer !== document.documentElement) {
-                                    feedContainer.style.setProperty('display', 'none', 'important');
-                                    feedContainer.style.setProperty('visibility', 'hidden', 'important');
-                                } else if (node.parentElement && node.parentElement !== document.body) {
-                                    node.parentElement.style.setProperty('display', 'none', 'important');
+                            if (suggestionKeywords.includes(trimmedText)) {
+                                // Only hide a single semantic post, never section,
+                                // presentation wrappers, or the heading's parent.
+                                const post = node.closest('article');
+                                if (post && !post.querySelector('article') &&
+                                    !post.querySelector('nav, main, [role="main"], [role="navigation"]')) {
+                                    post.style.setProperty('display', 'none', 'important');
                                 }
+
                             }
                         }
                     });
