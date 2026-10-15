@@ -183,7 +183,7 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+        if (supportsWebFeature(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(webView, "CleanGramShell",
                 setOf("https://www.instagram.com", "https://instagram.com")) { _, message, origin, mainFrame, _ ->
                 if (mainFrame && ShellNavigation.isTrustedPage(origin.toString())) {
@@ -389,8 +389,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun supportsWebFeature(feature: String) = runCatching { WebViewFeature.isFeatureSupported(feature) }.getOrDefault(false)
+
     private fun installDocumentStartScript() {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
+        if (!supportsWebFeature(WebViewFeature.DOCUMENT_START_SCRIPT)) return
         documentStartScript?.remove()
         documentStartScript = WebViewCompat.addDocumentStartJavaScript(webView,
             "if (window.top === window) {\n" + blockingScript + "\n" + shellScript +
@@ -459,7 +461,7 @@ class MainActivity : AppCompatActivity() {
                 scaleX = 0.94f; scaleY = 0.94f
                 animate().scaleX(1f).scaleY(1f).setDuration(140).start()
             }
-            findViewById<ImageView>(icons[index]).imageTintList = ColorStateList.valueOf(
+            findViewById<androidx.appcompat.widget.AppCompatImageView>(icons[index]).supportImageTintList = ColorStateList.valueOf(
                 ContextCompat.getColor(this, if (selected) R.color.shell_accent else R.color.shell_secondary))
         }
     }

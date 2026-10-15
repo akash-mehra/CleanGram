@@ -1,0 +1,73 @@
+package com.example
+
+import android.content.Context
+import android.os.Bundle
+import android.view.View
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.widget.FrameLayout
+import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/** Real Activity smoke tests use Robolectric's WebView, not a network or Instagram account. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class MainActivityRegressionTest {
+    @Before fun disableNetworkUpdateChecks() {
+        ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("updates", 0)
+            .edit().putBoolean("automatic", false).commit()
+    }
+
+    @Test fun `sound preference and Instagram cookie survive shell recreation`() {
+        val cookies = CookieManager.getInstance()
+        cookies.setAcceptCookie(true)
+        cookies.setCookie(MainActivity.DEFAULT_URL, "cleangram_test=preserved")
+        val first = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = first.get()
+        val button = activity.findViewById<View>(R.id.soundButton)
+        val old = activity.getPreferences(Context.MODE_PRIVATE).getBoolean("muted", true)
+        button.performClick()
+        assertEquals(!old, activity.getPreferences(Context.MODE_PRIVATE).getBoolean("muted", old))
+        val state = Bundle()
+        first.saveInstanceState(state).pause().stop().destroy()
+        val second = Robolectric.buildActivity(MainActivity::class.java).create(state).start().resume().visible()
+        assertEquals(!old, second.get().getPreferences(Context.MODE_PRIVATE).getBoolean("muted", old))
+        assertTrue(cookies.getCookie(MainActivity.DEFAULT_URL).contains("cleangram_test=preserved"))
+        second.pause().stop().destroy()
+    }
+
+    @Test fun `history callback synchronizes native selection for SPA messages and profiles`() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        val web = activity.findViewById<WebView>(R.id.webView)
+        web.webViewClient.doUpdateVisitedHistory(web, "https://www.instagram.com/direct/t/123/", false)
+        assertTrue(activity.findViewById<View>(R.id.navMessages).isSelected)
+        web.webViewClient.doUpdateVisitedHistory(web, "https://www.instagram.com/my.account/", false)
+        assertTrue(activity.findViewById<View>(R.id.navProfile).isSelected)
+        web.webViewClient.doUpdateVisitedHistory(web, MainActivity.DEFAULT_URL, false)
+        assertTrue(activity.findViewById<View>(R.id.navHome).isSelected)
+        controller.pause().stop().destroy()
+    }
+
+    @Test fun `fullscreen has a separate media host and exits through a native control`() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        val web = activity.findViewById<WebView>(R.id.webView)
+        var exits = 0
+        web.webChromeClient!!.onShowCustomView(View(activity), WebChromeClient.CustomViewCallback { exits++ })
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.mainShell).visibility)
+        assertEquals(1, activity.findViewById<FrameLayout>(R.id.fullscreenMedia).childCount)
+        activity.findViewById<View>(R.id.exitFullscreenButton).performClick()
+        assertEquals(1, exits)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.mainShell).visibility)
+        assertEquals(0, activity.findViewById<FrameLayout>(R.id.fullscreenMedia).childCount)
+        controller.pause().stop().destroy()
+    }
+}

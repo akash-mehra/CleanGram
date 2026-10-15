@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/rootContainer" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/shell_background">
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:id="@+id/rootContainer" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/shell_background">
  <LinearLayout android:id="@+id/mainShell" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
   <FrameLayout android:id="@+id/toolbarBand" android:layout_width="match_parent" android:layout_height="@dimen/shell_toolbar_band_height">
    <com.example.GlassSurface android:id="@+id/toolbarPanel" android:layout_width="match_parent" android:layout_height="@dimen/shell_toolbar_height" android:layout_marginStart="16dp" android:layout_marginEnd="16dp" android:layout_gravity="center" android:elevation="2dp">
@@ -30,7 +30,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:padding="24dp" android:orientation="vertical">
      <com.example.GlassSurface android:layout_width="match_parent" android:layout_height="wrap_content">
       <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="24dp" android:orientation="vertical" android:gravity="center">
-       <ImageView android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_connection" android:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
+       <androidx.appcompat.widget.AppCompatImageView android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_connection" app:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
        <TextView android:id="@+id/errorTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/error_title" android:textAppearance="@style/Text.CleanGram.Heading" android:gravity="center" android:accessibilityHeading="true"/>
        <TextView android:id="@+id/errorMessage" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="@string/error_body" android:textAppearance="@style/Text.CleanGram.Body" android:gravity="center"/>
        <Button android:id="@+id/retryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:text="@string/retry"/>
@@ -42,13 +42,13 @@
   <FrameLayout android:id="@+id/bottomDock" android:layout_width="match_parent" android:layout_height="@dimen/shell_dock_band_height">
    <com.example.GlassSurface android:id="@+id/navigationPanel" android:layout_width="match_parent" android:layout_height="@dimen/shell_nav_height" android:layout_marginStart="20dp" android:layout_marginEnd="20dp" android:layout_gravity="center" android:elevation="6dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:padding="4dp" android:contentDescription="@string/native_navigation"><LinearLayout android:id="@+id/navHome" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:minWidth="48dp" android:minHeight="56dp" android:orientation="vertical" android:gravity="center" android:padding="4dp" android:background="@drawable/shell_tab_background" android:clickable="true" android:focusable="true" android:contentDescription="@string/home">
- <ImageView android:id="@+id/navHomeIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_home" android:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
+ <androidx.appcompat.widget.AppCompatImageView android:id="@+id/navHomeIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_home" app:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/home" android:textSize="12sp" android:textColor="@color/shell_tab_text" android:duplicateParentState="true" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:importantForAccessibility="no"/>
 </LinearLayout><LinearLayout android:id="@+id/navMessages" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:minWidth="48dp" android:minHeight="56dp" android:orientation="vertical" android:gravity="center" android:padding="4dp" android:background="@drawable/shell_tab_background" android:clickable="true" android:focusable="true" android:contentDescription="@string/messages">
- <ImageView android:id="@+id/navMessagesIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_messages" android:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
+ <androidx.appcompat.widget.AppCompatImageView android:id="@+id/navMessagesIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_messages" app:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/messages" android:textSize="12sp" android:textColor="@color/shell_tab_text" android:duplicateParentState="true" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:importantForAccessibility="no"/>
 </LinearLayout><LinearLayout android:id="@+id/navProfile" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:minWidth="48dp" android:minHeight="56dp" android:orientation="vertical" android:gravity="center" android:padding="4dp" android:background="@drawable/shell_tab_background" android:clickable="true" android:focusable="true" android:contentDescription="@string/profile">
- <ImageView android:id="@+id/navProfileIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_profile" android:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
+ <androidx.appcompat.widget.AppCompatImageView android:id="@+id/navProfileIcon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_profile" app:tint="@color/shell_secondary" android:importantForAccessibility="no"/>
  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/profile" android:textSize="12sp" android:textColor="@color/shell_tab_text" android:duplicateParentState="true" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" android:importantForAccessibility="no"/>
 </LinearLayout></LinearLayout>
    </com.example.GlassSurface>
@@ -56,9 +56,9 @@
  </LinearLayout>
  <LinearLayout android:id="@+id/fullscreenContainer" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#000000" android:visibility="gone">
   <LinearLayout android:layout_width="match_parent" android:layout_height="56dp" android:paddingStart="12dp" android:paddingEnd="12dp" android:gravity="center_vertical" android:orientation="horizontal">
-   <ImageButton android:id="@+id/exitFullscreenButton" style="@style/Widget.CleanGram.IconButton" android:src="@drawable/ic_close" android:tint="#FFFFFF" android:background="#242424" android:contentDescription="@string/exit_fullscreen"/>
+   <ImageButton android:id="@+id/exitFullscreenButton" style="@style/Widget.CleanGram.IconButton" android:src="@drawable/ic_close" app:tint="#FFFFFF" android:background="#242424" android:contentDescription="@string/exit_fullscreen"/>
    <Space android:layout_width="0dp" android:layout_weight="1" android:layout_height="1dp"/>
-   <ImageButton android:id="@+id/fullscreenSoundButton" style="@style/Widget.CleanGram.IconButton" android:src="@drawable/ic_sound_off" android:tint="#FFFFFF" android:background="#242424" android:contentDescription="@string/unmute_video"/>
+   <ImageButton android:id="@+id/fullscreenSoundButton" style="@style/Widget.CleanGram.IconButton" android:src="@drawable/ic_sound_off" app:tint="#FFFFFF" android:background="#242424" android:contentDescription="@string/unmute_video"/>
   </LinearLayout>
   <FrameLayout android:id="@+id/fullscreenMedia" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
  </LinearLayout>

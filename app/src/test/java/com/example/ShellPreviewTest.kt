@@ -95,7 +95,9 @@ class ShellPreviewTest {
         val updates = AppUpdates(activity)
         controller.start().resume().visible()
         val dialog = SettingsPanel.show(activity, updates, true, {}, {})
-        capture(dialog.window!!.decorView, "settings-light", 358, 720)
+        val panel = dialog.findViewById<View>(android.R.id.content)!!
+        panel.setBackgroundResource(R.drawable.shell_dialog_background)
+        capture(panel, "settings-light", 358, 720)
         assertTrue(dialog.isShowing)
         dialog.dismiss(); updates.close()
         controller.pause().stop().destroy()

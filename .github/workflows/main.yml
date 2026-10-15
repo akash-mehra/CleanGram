@@ -33,6 +33,9 @@ jobs:
         run: node --test scripts/test-distraction-filter.cjs scripts/test-shell-navigation.cjs
       - name: Test
         run: gradle testDebugUnitTest lintDebug --stacktrace
+      - name: Summarize Android checks and previews
+        if: always()
+        run: python3 scripts/summarize-android-checks.py
       - name: Upload native shell previews and Android reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,6 +45,7 @@ jobs:
             app/build/outputs/shell-previews/
             app/build/reports/tests/testDebugUnitTest/
             app/build/reports/lint-results-debug.html
+            app/build/test-results/testDebugUnitTest/
           if-no-files-found: warn
       - name: Check release signing configuration
         id: signing
