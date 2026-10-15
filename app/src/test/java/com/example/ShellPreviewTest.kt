@@ -81,6 +81,10 @@ class ShellPreviewTest {
 
     @Test fun lightHome() = shell("home-light")
     @Test @Config(qualifiers = "w390dp-h844dp-night-mdpi") fun darkHome() = shell("home-dark")
+    @Test fun enlargedText() {
+        org.robolectric.RuntimeEnvironment.setFontScale(1.6f)
+        try { shell("large-text") } finally { org.robolectric.RuntimeEnvironment.setFontScale(1f) }
+    }
     @Test fun error() = shell("error-light", error = true)
     @Test @Config(qualifiers = "w780dp-h390dp-land-mdpi") fun landscape() = shell("landscape", width = 780, height = 340)
     @Test @Config(qualifiers = "w320dp-h640dp-mdpi") fun compact() = shell("compact", width = 320, height = 560)

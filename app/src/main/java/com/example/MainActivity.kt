@@ -474,6 +474,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun navigateNative(destination: ShellNavigation.Destination) {
         if (customView != null) exitFullscreen()
+        if (pageError) {
+            if (destination.path != null) webView.loadUrl(ShellNavigation.ORIGIN + destination.path)
+            else showProfileShortcut()
+            return
+        }
         if (!ShellNavigation.isTrustedPage(webView.url)) {
             webView.loadUrl(DEFAULT_URL)
             return

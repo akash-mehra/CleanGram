@@ -31,7 +31,7 @@
   <string name="install_downloaded">Install downloaded update</string>
   <string name="close">Done</string>
   <string name="profile_shortcut_title">Open your profile</string>
-  <string name="profile_shortcut_body">Instagram hasn’t exposed your profile shortcut yet. Enter your username to open it.</string>
+  <string name="profile_shortcut_body">Enter your Instagram username to open your profile.</string>
   <string name="username_hint">Instagram username</string>
   <string name="open_profile">Open profile</string>
   <string name="invalid_username">Use your Instagram username: letters, numbers, dots or underscores.</string>
