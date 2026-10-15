@@ -94,7 +94,9 @@ class ShellPreviewTest {
         val activity = controller.get()
         val updates = AppUpdates(activity)
         controller.start().resume().visible()
-        val dialog = SettingsPanel.show(activity, updates, true, {}, {})
+        var sound: Boolean? = null
+        var appearanceChanges = 0
+        val dialog = SettingsPanel.show(activity, updates, true, { sound = it }, { appearanceChanges++ })
         org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         val panel = dialog.findViewById<View>(android.R.id.content)!!
         // Offscreen Canvas capture has no window AttachInfo; native scroll
@@ -107,6 +109,17 @@ class ShellPreviewTest {
         panel.setBackgroundResource(R.drawable.shell_dialog_background)
         capture(panel, "settings-light", 358, 720)
         assertTrue(dialog.isShowing)
+        val check = dialog.findViewById<android.widget.Button>(R.id.checkUpdatesButton)!!
+        val displayText = check.transformationMethod?.getTransformation(check.text, check)?.toString() ?: check.text.toString()
+        assertEquals("Check for updates", displayText)
+        assertTrue(check.minHeight >= 48)
+        dialog.findViewById<View>(R.id.settingMute)!!.performClick()
+        assertEquals(false, sound)
+        dialog.findViewById<View>(R.id.settingSolid)!!.performClick()
+        assertTrue(activity.getSharedPreferences("appearance", 0).getBoolean("solid", false))
+        assertEquals(1, appearanceChanges)
+        dialog.findViewById<View>(R.id.settingAutomatic)!!.performClick()
+        assertFalse(updates.automaticChecks())
         dialog.dismiss(); updates.close()
         controller.pause().stop().destroy()
     }

@@ -5,6 +5,7 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="colorAccent">@color/shell_accent</item>
+        <item name="android:colorAccent">@color/shell_accent</item>
         <item name="android:colorBackground">@color/shell_background</item>
         <item name="android:textColorPrimary">@color/shell_text</item>
         <item name="android:textColorSecondary">@color/shell_secondary</item>
@@ -14,6 +15,7 @@
     </style>
     <style name="ThemeOverlay.CleanGram.Dialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
         <item name="colorAccent">@color/shell_accent</item>
+        <item name="android:colorAccent">@color/shell_accent</item>
         <item name="android:windowBackground">@drawable/shell_dialog_background</item>
         <item name="android:colorBackground">@color/shell_surface</item>
         <item name="android:textColorPrimary">@color/shell_text</item>

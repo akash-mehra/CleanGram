@@ -1,0 +1,6 @@
+<resources>
+    <item type="id" name="checkUpdatesButton" />
+    <item type="id" name="settingMute" />
+    <item type="id" name="settingSolid" />
+    <item type="id" name="settingAutomatic" />
+</resources>

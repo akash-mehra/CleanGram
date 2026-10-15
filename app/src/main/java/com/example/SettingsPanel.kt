@@ -2,7 +2,7 @@ package com.example
 
 import android.os.Build
 import android.view.ViewGroup
-import android.widget.Button
+import androidx.appcompat.widget.AppCompatButton
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -29,6 +29,11 @@ object SettingsPanel {
         fun section(text: Int) { label(activity.getString(text), 11f, R.color.shell_secondary, 24) }
         fun toggle(title: Int, description: Int, initial: Boolean, change: (Boolean) -> Unit) {
             body.addView(SwitchCompat(activity).apply {
+                id = when (title) {
+                    R.string.mute_setting -> R.id.settingMute
+                    R.string.solid_setting -> R.id.settingSolid
+                    else -> R.id.settingAutomatic
+                }
                 text = activity.getString(title); textSize = 16f
                 setTextColor(ContextCompat.getColor(activity, R.color.shell_text))
                 minHeight = dp(56); switchPadding = dp(16)
@@ -52,11 +57,12 @@ object SettingsPanel {
         }
         section(R.string.updates)
         toggle(R.string.automatic_setting, R.string.automatic_description, updates.automaticChecks(), updates::setAutomaticChecks)
-        body.addView(Button(activity).apply {
+        body.addView(AppCompatButton(activity).apply {
+            id = R.id.checkUpdatesButton
             setText(R.string.check_updates)
             setOnClickListener { dialog?.dismiss(); updates.checkNow() }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
-        if (updates.hasDownloadedUpdate()) body.addView(Button(activity).apply {
+        if (updates.hasDownloadedUpdate()) body.addView(AppCompatButton(activity).apply {
             setText(R.string.install_downloaded)
             setOnClickListener { dialog?.dismiss(); updates.installPendingUpdate() }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
