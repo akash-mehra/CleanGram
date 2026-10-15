@@ -30,9 +30,19 @@ jobs:
         with:
           gradle-version: '9.3.1'
       - name: Test distraction filters
-        run: node --test scripts/test-distraction-filter.cjs
+        run: node --test scripts/test-distraction-filter.cjs scripts/test-shell-navigation.cjs
       - name: Test
-        run: gradle testDebugUnitTest --stacktrace
+        run: gradle testDebugUnitTest lintDebug --stacktrace
+      - name: Upload native shell previews and Android reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanGram-Android-Checks
+          path: |
+            app/build/outputs/shell-previews/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+          if-no-files-found: warn
       - name: Check release signing configuration
         id: signing
         env:

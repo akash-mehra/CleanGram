@@ -1,0 +1,6 @@
+<resources>
+    <dimen name="shell_toolbar_band_height">72dp</dimen>
+    <dimen name="shell_toolbar_height">56dp</dimen>
+    <dimen name="shell_dock_band_height">76dp</dimen>
+    <dimen name="shell_nav_height">60dp</dimen>
+</resources>

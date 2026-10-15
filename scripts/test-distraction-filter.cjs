@@ -2,8 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync('app/src/main/java/com/example/MainActivity.kt', 'utf8')
-  .split('val DISTRACTION_FREE_INJECTION_JS = """')[1].split('""".trimIndent()')[0];
+const source = fs.readFileSync('app/src/main/assets/distraction-blocking.js', 'utf8');
 
 function page(path = '/direct/t/123/', options = {}) {
   const documentListeners = {}, windowListeners = {}, hidden = new Set(), calls = [];

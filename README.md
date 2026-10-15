@@ -63,3 +63,32 @@ Signed builds on main automatically publish a GitHub release with a `v<versionCo
 The first updater-enabled version must be installed manually over the existing signed app. Later published releases can be installed through the app. Android still requires the user's confirmation; updates never silently install or require uninstalling the app.
 
 Updater device checks: manual checks with no release/equal/newer version, offline/rate-limit responses, Later/automatic checks off, download cancel, installer permission denied/granted, install cancel/retry, and an in-place upgrade retaining Instagram login.
+
+
+## Native shell
+
+CleanGram now reserves native layout bands above and below the WebView. Home, Messages and Profile drive Instagram's existing links/router, with ordinary HTTPS website navigation as a fallback. Instagram still handles login, posts, conversations, profiles, uploads and account state. Profile discovery uses only an explicitly labelled profile link; if Instagram changes or localizes that link, a username prompt is the safe fallback. No account is inferred from feed avatars and no unofficial Instagram API is used.
+
+The dock floats visually inside its own reserved band, never over the WebView. It hides while the keyboard is visible. System/cutout and IME insets are applied once using the larger bottom inset, and dimensions adapt on rotation. Fullscreen video switches to a separate native layout with Close and Sound controls in a reserved strip above the media. Sound continues using the existing MainActivity preferences; cookies and WebView history/state are retained.
+
+Light and dark resources follow device appearance. Navigation uses lightly translucent tints and borders over the shell background, without blurring the WebView or its text. Settings > Solid surfaces switches to opaque panels. Dialogs use optional Android 12+ cross-window blur only when the system allows it, with an opaque fallback when unavailable or disabled. Selection uses a short native animation and platform ripples; there are no looping decorative animations.
+
+### Boundaries
+
+- `ShellNavigation.kt` / `ShellLayout.kt`: native route and inset policies.
+- `MainActivity.kt`: WebView lifecycle, native controls, sound, file chooser and fullscreen host.
+- `SettingsPanel.kt`, `GlassSurface.kt`, `GlassDialogs.kt`, themed resources: native visual styling.
+- `assets/instagram-shell.js`: native route notifications, link navigation and optional duplicate-nav suppression. It only suppresses a positively identified, compact bottom navigation landmark with Home and Inbox links, bounded height, and no content/form/media descendants. Unknown Instagram layouts keep their original controls.
+- `assets/distraction-blocking.js`: discovery policy, kept separate from styling. Blocks `/reels` and `/explore` through full and client-side navigation, while preserving `/reel/<post>`, `/p/<post>`, DM attachments and followed posts. Suggestion removal stays limited to exact labels inside single articles.
+- `assets/media-preferences.js`: saved global media mute preference.
+- `AppUpdates.kt` / `UpdateRelease.kt`: existing digest, version, app ID and permanent-certificate validation and Android installer flow.
+
+The route message channel is restricted to HTTPS Instagram origins and top-frame messages, exposes no account data or privileged operations, and has a history-callback fallback for older WebViews. Scripts are re-applied after document commits; document-start injection is feature-detected.
+
+### Verification and previews
+
+`node --test scripts/test-distraction-filter.cjs scripts/test-shell-navigation.cjs` exercises feed-preservation, discovery blocking, SPA navigation, authentication redirects, profile fallback, reinjection, targeted navigation suppression, and dynamic media preferences using deterministic DOM fixtures. These tests do not claim to reproduce Instagram's live DOM.
+
+`gradle testDebugUnitTest lintDebug` runs native route/inset/version tests, layout separation and minimum touch-target checks, and renders the actual native layouts with Robolectric Native Graphics. The previews label the WebView area as a placeholder and contain no real Instagram account content. CI uploads previews and test/lint reports as `CleanGram-Android-Checks`, then builds a signed APK using the existing application ID and release secrets. Branch builds do not publish releases.
+
+Real-device checks still required before release: Instagram login and persistence through in-place update; native tab navigation against the current English/localized site; followed feed and shared photo/video/Reel attachments; DM composer and photo picker; gesture/three-button insets; keyboard open/close and rotation; video fullscreen/Back; mute persistence; TalkBack and enlarged text; system dark mode and blur-disabled/solid surfaces; update check/download/cancel/permission/installation. Tests of native layout and script fixtures are distinct from these live-service checks.
