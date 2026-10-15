@@ -74,6 +74,11 @@ class ShellPreviewTest {
         assertTrue("Toolbar floats over web content", toolbar.bottom > content.top)
         assertTrue("Dock floats over web content", dock.top < content.bottom)
         assertTrue("Web content must have usable height", content.height > 100)
+        if (error) {
+            val errorPanel = activity.findViewById<View>(R.id.errorContainer)
+            assertTrue("Native errors need scroll clearance above floating dock", errorPanel.paddingBottom >= dock.height)
+            assertTrue("Native errors need clearance below toolbar", errorPanel.paddingTop >= toolbar.height)
+        }
         for (id in listOf(R.id.settingsButton, R.id.soundButton, R.id.navHome, R.id.navMessages, R.id.navNotifications, R.id.navProfile)) {
             val control = activity.findViewById<View>(id)
             assertTrue("Touch target too short", control.height >= 48)
@@ -90,6 +95,7 @@ class ShellPreviewTest {
         try { shell("large-text") } finally { org.robolectric.RuntimeEnvironment.setFontScale(1f) }
     }
     @Test fun error() = shell("error-light", error = true)
+    @Test @Config(qualifiers = "w780dp-h390dp-land-mdpi") fun landscapeError() = shell("landscape-error", error = true, width = 780, height = 340)
     @Test @Config(qualifiers = "w780dp-h390dp-land-mdpi") fun landscape() = shell("landscape", width = 780, height = 340)
     @Test @Config(qualifiers = "w320dp-h640dp-mdpi") fun compact() = shell("compact", width = 320, height = 560)
 

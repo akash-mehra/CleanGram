@@ -3,7 +3,7 @@
  <FrameLayout android:id="@+id/mainShell" android:layout_width="match_parent" android:layout_height="match_parent">
   <FrameLayout android:id="@+id/contentFrame" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/shell_surface">
    <WebView android:id="@+id/webView" android:layout_width="match_parent" android:layout_height="match_parent" android:overScrollMode="never"/>
-   <FrameLayout android:id="@+id/loadingContainer" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/shell_background" android:clickable="true">
+   <FrameLayout android:id="@+id/loadingContainer" android:paddingTop="@dimen/shell_toolbar_band_height" android:paddingBottom="@dimen/shell_dock_band_height" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/shell_background" android:clickable="true">
     <com.example.GlassSurface android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="center" android:layout_margin="24dp">
      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="28dp" android:gravity="center" android:orientation="vertical">
       <ProgressBar android:layout_width="32dp" android:layout_height="32dp" android:indeterminateTint="@color/shell_accent" android:importantForAccessibility="no"/>
@@ -12,7 +12,7 @@
      </LinearLayout>
     </com.example.GlassSurface>
    </FrameLayout>
-   <ScrollView android:id="@+id/errorContainer" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="@color/shell_background" android:visibility="gone">
+   <ScrollView android:id="@+id/errorContainer" android:paddingTop="@dimen/shell_toolbar_band_height" android:paddingBottom="@dimen/shell_dock_band_height" android:clipToPadding="false" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="@color/shell_background" android:visibility="gone">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:padding="24dp" android:orientation="vertical">
      <com.example.GlassSurface android:layout_width="match_parent" android:layout_height="wrap_content">
       <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="24dp" android:orientation="vertical" android:gravity="center">
