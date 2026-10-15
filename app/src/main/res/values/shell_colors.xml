@@ -1,6 +1,6 @@
 <resources>
     <color name="shell_background">#F1F6F5</color>
-    <color name="shell_panel">#EDF9FCFA</color>
+    <color name="shell_panel">#DDF3FAF8</color>
     <color name="shell_surface">#FFFFFF</color>
     <color name="shell_text">#193532</color>
     <color name="shell_secondary">#526D68</color>

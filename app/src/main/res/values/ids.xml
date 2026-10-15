@@ -3,4 +3,5 @@
     <item type="id" name="settingMute" />
     <item type="id" name="settingSolid" />
     <item type="id" name="settingAutomatic" />
+<item name="settingSiteControls" type="id"/>
 </resources>

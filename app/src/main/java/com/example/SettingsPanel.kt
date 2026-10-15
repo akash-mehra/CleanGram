@@ -32,6 +32,7 @@ object SettingsPanel {
                 id = when (title) {
                     R.string.mute_setting -> R.id.settingMute
                     R.string.solid_setting -> R.id.settingSolid
+                    R.string.site_controls -> R.id.settingSiteControls
                     else -> R.id.settingAutomatic
                 }
                 text = activity.getString(title); textSize = 16f
@@ -54,6 +55,10 @@ object SettingsPanel {
             // Immediate safe fallback in the open sheet; future sheets reread the preference.
             dialog?.window?.setBackgroundDrawableResource(R.drawable.shell_dialog_background)
             if (checked && Build.VERSION.SDK_INT >= 31) dialog?.window?.setBackgroundBlurRadius(0)
+        }
+        toggle(R.string.site_controls, R.string.site_controls_description, appearance.getBoolean("siteControls", false)) { checked ->
+            appearance.edit().putBoolean("siteControls", checked).apply()
+            onAppearance()
         }
         section(R.string.updates)
         toggle(R.string.automatic_setting, R.string.automatic_description, updates.automaticChecks(), updates::setAutomaticChecks)

@@ -15,29 +15,44 @@ function page(path = '/', options = {}) {
   for (const method of ['pushState','replaceState']) history[method] = (state,title,url) => {
     if(url!=null) location.pathname = new URL(url,location.href).pathname;
   };
-  const links = (options.links || []).map(item => ({href:location.origin+item.path,
-    textContent:item.label||'',getAttribute:()=>item.aria||'',querySelector:()=>item.profileIcon?{}:null,
-    closest:selector=>item.inArticle?{}:item.inMain && selector==='main'?{}:null,
-    click(){item.clicked=true;if(!item.broken) history.pushState({},'',item.path);}}));
-  const navs = (options.navs || []).map(item=>({
-    hasAttribute:()=>!!item.marked,setAttribute:()=>item.marked=true,
-    getBoundingClientRect:()=>({height:item.height,top:item.top}),
-    querySelector:(s)=>s==='a[href="/"]' || s==='a[href="/direct/inbox/"]'? (item.landmarkLinks?{}:null) : item.containsContent?{}:null,
-    style:{setProperty:()=>item.hidden=true}}));
-  const document = {documentElement:options.noDocument?null:{toggleAttribute(){}},
-    getElementById:()=>true,querySelectorAll(s){
+  function style(item={}) {
+    const values={};return {setProperty:(key,value)=>{values[key]=value;if(key==='display')item.hidden=value==='none';},
+      getPropertyValue:key=>values[key]||'',getPropertyPriority:()=>'',removeProperty:key=>{delete values[key];if(key==='display')item.hidden=false;}};
+  }
+  function control(item) {
+    return {href:item.path?location.origin+item.path:undefined, textContent:item.label||'',
+      getAttribute:name=>name==='aria-label'?item.aria||'':'',querySelector:s=>item.profileIcon && s.includes('Profile')?{}:null,
+      closest:selector=>item.inArticle?{}:item.inMain && selector==='main'?{}:null,
+      getBoundingClientRect:()=>({height:24,top:10,bottom:34}),style:style(item),
+      click(){item.clicked=true;if(item.path&&!item.broken)history.pushState({},'',item.path);}};
+  }
+  const links=(options.links||[]).map(control), buttons=(options.buttons||[]).map(control);
+  const navs=(options.navs||[]).map(item=>{
+    const actions=(item.actions|| (item.landmarkLinks?[{path:'/'},{path:'/direct/inbox/'}]:[])).map(control);
+    return {getBoundingClientRect:()=>({height:item.height,top:item.top,bottom:item.top+item.height}),closest:()=>null,
+      querySelector:s=>s==='a[href="/"]'?actions.find(c=>c.href?.endsWith('.com/')):
+        s==='a[href="/direct/inbox/"]'?actions.find(c=>c.href?.endsWith('/direct/inbox/')):item.containsContent?{}:null,
+      querySelectorAll:()=>actions,style:style(item),actions};
+  });
+  for(let i=0;i<navs.length;i++) if(options.navs[i].generic) {
+    links.push(...navs[i].actions);for(const action of navs[i].actions)action.parentElement=navs[i];
+  }
+  const stylesheet={textContent:''},root={setAttribute(){},toggleAttribute(){},appendChild(){}},body={setAttribute(){}};
+  const document = {documentElement:options.noDocument?null:root,body,
+    getElementById:()=>stylesheet,querySelectorAll(s){
       if(s==='a[href]')return links;
-      if(s==='nav, [role="navigation"]')return navs;
+      if(s==='a[href], button, [role="button"]')return [...links,...buttons];
+      if(s==='nav, [role="navigation"]')return navs.filter((n,i)=>!options.navs[i].generic);
       return [];
     },addEventListener:(name,callback)=>events[name]=callback};
-  const window = {innerHeight:800,CleanGramShell:{postMessage:payload=>messages.push(JSON.parse(payload))},
+  const window = {innerHeight:800,getComputedStyle:()=>({overflowY:'visible',position:'static'}),CleanGramShell:{postMessage:payload=>messages.push(JSON.parse(payload))},
     addEventListener:(name,callback)=>events[name]=callback};
   const context=vm.createContext({window,document,location,history,URL,
     setTimeout:callback=>timers.push(callback),requestAnimationFrame:callback=>callback(),
     MutationObserver:class{constructor(callback){observers.push(callback)}observe(){}}});
   if(options.withBlocking)vm.runInContext(blocking,context);
   vm.runInContext(shell,context);
-  return {context,window,document,location,history,links,messages,assignments,events,
+  return {context,window,document,location,history,links,navs,stylesheet,messages,assignments,events,
     flush:()=>timers.splice(0).forEach(fn=>fn())};
 }
 
@@ -108,4 +123,43 @@ test('repeated DOM refreshes do not flood native controls with unchanged routes'
   const p=page('/');const count=p.messages.length;
   p.window.__cleanGramShell.refresh();p.window.__cleanGramShell.refresh();
   assert.equal(p.messages.length,count);
+});
+
+
+test('Notifications uses an existing site link and preserves its client-side route',()=>{
+ const p=page('/',{links:[{path:'/notifications/'}]});
+ assert(p.window.__cleanGramShell.navigate('notifications'));p.flush();
+ assert.equal(p.location.pathname,'/notifications/');assert.equal(p.assignments.length,0);
+});
+test('button-based Notifications opens the website panel without a forced reload',()=>{
+ const button={aria:'Notifications'};const p=page('/',{buttons:[button]});
+ assert(p.window.__cleanGramShell.navigate('notifications'));p.flush();
+ assert(button.clicked);assert.equal(p.assignments.length,0);
+});
+test('Notifications falls back to an ordinary Instagram activity page',()=>{
+ const p=page('/');p.window.__cleanGramShell.navigate('notifications');p.flush();
+ assert.deepEqual(p.assignments,['/accounts/activity/']);
+});
+test('generic compact navigation is replaced without relying on nav semantics',()=>{
+ const nav={generic:true,height:64,top:736,landmarkLinks:true};page('/',{navs:[nav]});assert(nav.hidden);
+});
+test('Create and other unknown actions survive duplicate shortcut suppression',()=>{
+ const home={path:'/'},messages={path:'/direct/inbox/'},create={aria:'Create'};
+ const nav={generic:true,height:64,top:736,actions:[home,messages,create]};
+ page('/',{navs:[nav]});assert(!nav.hidden);assert(home.hidden);assert(messages.hidden);assert(!create.hidden);
+});
+test('website navigation can be restored and clearance follows keyboard changes',()=>{
+ const nav={height:64,top:736,landmarkLinks:true};const p=page('/',{navs:[nav]});
+ assert(nav.hidden);p.window.__cleanGramShell.setClearance(0,0,true);assert(!nav.hidden);
+ assert(p.stylesheet.textContent.includes('padding-bottom:0px'));
+ p.window.__cleanGramShell.setClearance(64,88,false);assert(nav.hidden);
+ assert(p.stylesheet.textContent.includes('padding-bottom:88px'));
+});
+test('the latest native navigation wins over a pending fallback',()=>{
+ const p=page('/');p.window.__cleanGramShell.navigate('messages');p.window.__cleanGramShell.navigate('notifications');p.flush();
+ assert.deepEqual(p.assignments,['/accounts/activity/']);
+});
+test('Back cancels pending native fallback navigation',()=>{
+ const p=page('/');p.window.__cleanGramShell.navigate('messages');p.events.popstate();p.flush();
+ assert.deepEqual(p.assignments,[]);
 });

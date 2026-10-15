@@ -12,6 +12,8 @@ class ShellNavigationTest {
     @Test fun `shell routes are origin restricted and classify website navigation`() {
         assertEquals(ShellNavigation.Destination.HOME, ShellNavigation.destination("https://www.instagram.com/"))
         assertEquals(ShellNavigation.Destination.MESSAGES, ShellNavigation.destination("https://www.instagram.com/direct/t/123/"))
+        assertEquals(ShellNavigation.Destination.NOTIFICATIONS, ShellNavigation.destination("https://www.instagram.com/accounts/activity/"))
+        assertEquals(ShellNavigation.Destination.NOTIFICATIONS, ShellNavigation.destination("https://www.instagram.com/notifications/"))
         assertEquals(ShellNavigation.Destination.PROFILE, ShellNavigation.destination("https://www.instagram.com/my.account/"))
         for (url in listOf("https://instagram.com.evil.test/", "http://www.instagram.com/", "https://www.instagram.com:444/", "file:///direct/inbox/", "https://www.instagram.com/accounts/login/", "https://www.instagram.com/p/shared/")) {
             assertNull(url, ShellNavigation.destination(url))

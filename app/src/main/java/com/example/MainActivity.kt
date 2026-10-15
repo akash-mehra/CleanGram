@@ -117,6 +117,8 @@ class MainActivity : AppCompatActivity() {
                 keyboardVisible, customView != null)
             view.setPadding(layout.left, layout.top, layout.right, layout.bottom)
             bottomDock.visibility = if (layout.showDock) View.VISIBLE else View.GONE
+            findViewById<View>(R.id.toolbarBand).visibility = if (keyboardVisible) View.GONE else View.VISIBLE
+            updateWebClearance()
             insets
         }
         ViewCompat.requestApplyInsets(rootContainer)
@@ -401,7 +403,16 @@ class MainActivity : AppCompatActivity() {
         if (!ShellNavigation.isTrustedPage(view?.url)) return
         view?.evaluateJavascript(blockingScript, null)
         view?.evaluateJavascript(shellScript, null)
+        updateWebClearance()
         applySoundPreference()
+    }
+
+    private fun updateWebClearance() {
+        if (!::webView.isInitialized || !ShellNavigation.isTrustedPage(webView.url)) return
+        val top = if (keyboardVisible) 0 else 64
+        val bottom = if (keyboardVisible) 0 else 88
+        val siteControls = getSharedPreferences("appearance", MODE_PRIVATE).getBoolean("siteControls", false)
+        webView.evaluateJavascript("window.__cleanGramShell?.setClearance($top, $bottom, $siteControls)", null)
     }
 
     private fun setMuted(value: Boolean) {
@@ -428,7 +439,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindNavigation() {
         for ((id, destination) in listOf(R.id.navHome to ShellNavigation.Destination.HOME,
-            R.id.navMessages to ShellNavigation.Destination.MESSAGES, R.id.navProfile to ShellNavigation.Destination.PROFILE)) {
+            R.id.navMessages to ShellNavigation.Destination.MESSAGES,
+            R.id.navNotifications to ShellNavigation.Destination.NOTIFICATIONS, R.id.navProfile to ShellNavigation.Destination.PROFILE)) {
             findViewById<View>(id).apply {
                 setOnClickListener { navigateNative(destination) }
                 ViewCompat.setAccessibilityDelegate(this, object : AccessibilityDelegateCompat() {
@@ -448,8 +460,8 @@ class MainActivity : AppCompatActivity() {
         val changed = selectedDestination != destination
         selectedDestination = destination
         findViewById<TextView>(R.id.screenTitle).setText(destination.label)
-        val ids = listOf(R.id.navHome, R.id.navMessages, R.id.navProfile)
-        val icons = listOf(R.id.navHomeIcon, R.id.navMessagesIcon, R.id.navProfileIcon)
+        val ids = listOf(R.id.navHome, R.id.navMessages, R.id.navNotifications, R.id.navProfile)
+        val icons = listOf(R.id.navHomeIcon, R.id.navMessagesIcon, R.id.navNotificationsIcon, R.id.navProfileIcon)
         ids.forEachIndexed { index, id ->
             val selected = index == destination.ordinal
             findViewById<View>(id).isSelected = selected
@@ -484,7 +496,8 @@ class MainActivity : AppCompatActivity() {
         injectPageScripts(webView)
         val name = destination.name.lowercase(Locale.ROOT)
         webView.evaluateJavascript("!!(window.__cleanGramShell && window.__cleanGramShell.navigate('$name'))") { handled ->
-            if (handled != "true") {
+            if (handled == "true") renderDestination(destination)
+            else {
                 if (destination.path != null) webView.loadUrl(ShellNavigation.ORIGIN + destination.path)
                 else showProfileShortcut()
             }
@@ -522,6 +535,7 @@ class MainActivity : AppCompatActivity() {
             if (view is ViewGroup) for (i in 0 until view.childCount) refresh(view.getChildAt(i))
         }
         refresh(findViewById(R.id.rootContainer))
+        updateWebClearance()
     }
 
     private fun exitFullscreen() {

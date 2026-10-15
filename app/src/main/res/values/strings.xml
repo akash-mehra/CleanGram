@@ -6,6 +6,10 @@
   <string name="mute_video">Turn video sound off</string>
   <string name="settings">Settings</string>
   <string name="home">Home</string>
+  <string name="notifications">Notifications</string>
+  <string name="alerts">Alerts</string>
+  <string name="site_controls">Show Instagram navigation</string>
+  <string name="site_controls_description">Restore website shortcuts if Instagram changes its layout.</string>
   <string name="messages">Messages</string>
   <string name="profile">Profile</string>
   <string name="native_navigation">Main navigation</string>

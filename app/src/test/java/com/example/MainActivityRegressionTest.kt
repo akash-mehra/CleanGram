@@ -51,6 +51,8 @@ class MainActivityRegressionTest {
         assertTrue(activity.findViewById<View>(R.id.navMessages).isSelected)
         web.webViewClient.doUpdateVisitedHistory(web, "https://www.instagram.com/my.account/", false)
         assertTrue(activity.findViewById<View>(R.id.navProfile).isSelected)
+        web.webViewClient.doUpdateVisitedHistory(web, "https://www.instagram.com/accounts/activity/", false)
+        assertTrue(activity.findViewById<View>(R.id.navNotifications).isSelected)
         web.webViewClient.doUpdateVisitedHistory(web, MainActivity.DEFAULT_URL, false)
         assertTrue(activity.findViewById<View>(R.id.navHome).isSelected)
         controller.pause().stop().destroy()

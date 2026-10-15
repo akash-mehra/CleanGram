@@ -7,7 +7,7 @@ import java.util.Locale
 object ShellNavigation {
     const val ORIGIN = "https://www.instagram.com"
     enum class Destination(val path: String?, val label: Int) {
-        HOME("/", R.string.home), MESSAGES("/direct/inbox/", R.string.messages), PROFILE(null, R.string.profile)
+        HOME("/", R.string.home), MESSAGES("/direct/inbox/", R.string.messages), NOTIFICATIONS("/accounts/activity/", R.string.notifications), PROFILE(null, R.string.profile)
     }
 
     fun isInstagramHost(host: String?): Boolean = host != null &&
@@ -33,7 +33,7 @@ object ShellNavigation {
         return isReelsUrl(url) || path == "/explore" || path?.startsWith("/explore/") == true
     }
 
-    private val reserved = setOf("accounts", "direct", "p", "reel", "reels", "explore", "stories", "about", "legal", "challenge", "oauth", "emails", "web")
+    private val reserved = setOf("notifications", "accounts", "direct", "p", "reel", "reels", "explore", "stories", "about", "legal", "challenge", "oauth", "emails", "web")
     fun profilePath(username: String): String? {
         val value = username.trim().removePrefix("@")
         return if (Regex("[A-Za-z0-9._]{1,30}").matches(value) && value.any { it.isLetterOrDigit() || it == '_' } && value.lowercase(Locale.ROOT) !in reserved) "/$value/" else null
@@ -44,6 +44,7 @@ object ShellNavigation {
         val path = Uri.parse(url).path?.trimEnd('/') ?: return null
         return when {
             path.isEmpty() -> Destination.HOME
+            path == "/accounts/activity" || path == "/notifications" -> Destination.NOTIFICATIONS
             path == "/direct" || path.startsWith("/direct/") -> Destination.MESSAGES
             path.count { it == '/' } == 1 && profilePath(path.removePrefix("/")) != null -> Destination.PROFILE
             else -> null
