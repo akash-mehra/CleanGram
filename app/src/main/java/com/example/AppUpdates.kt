@@ -28,29 +28,19 @@ class AppUpdates(private val activity: AppCompatActivity) {
     private val prefs = activity.getSharedPreferences("updates", 0)
     private val apk get() = File(activity.filesDir, "updates/latest.apk")
     private var checking = false
+    private var checkJob: Job? = null
+    private var checkProgress: AlertDialog? = null
     private var downloading: Job? = null
     private var prompt: AlertDialog? = null
     private val permissionLauncher = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (canInstall()) installDownloaded() else message("Installation permission was not enabled. You can try again from Settings.")
     }
 
-    fun showSettings() {
-        val automatic = prefs.getBoolean("automatic", true)
-        val choices = mutableListOf("Check for updates", "Automatic checks: ${if (automatic) "on" else "off"}")
-        if (apk.exists()) choices.add("Install downloaded update")
-        AlertDialog.Builder(activity)
-            .setTitle("Settings · CleanGram ${BuildConfig.VERSION_NAME}")
-            .setItems(choices.toTypedArray()) { _, index ->
-                when (index) {
-                    0 -> checkForUpdates(manual = true)
-                    1 -> {
-                        prefs.edit().putBoolean("automatic", !automatic).apply()
-                        message(if (automatic) "Automatic update checks turned off" else "Automatic update checks turned on")
-                    }
-                    2 -> requestInstall()
-                }
-            }.setNegativeButton("Close", null).show()
-    }
+    fun automaticChecks() = prefs.getBoolean("automatic", true)
+    fun setAutomaticChecks(enabled: Boolean) { prefs.edit().putBoolean("automatic", enabled).apply() }
+    fun hasDownloadedUpdate() = apk.exists()
+    fun checkNow() = checkForUpdates(manual = true)
+    fun installPendingUpdate() = requestInstall()
 
     fun onResume() {
         if (prefs.getBoolean("automatic", true) &&
@@ -67,8 +57,13 @@ class AppUpdates(private val activity: AppCompatActivity) {
         checking = true
         // Avoid repeatedly calling GitHub on each resume, including during outages.
         prefs.edit().putLong("last_check", System.currentTimeMillis()).apply()
-        if (manual) message("Checking for updates…")
-        activity.lifecycleScope.launch {
+        if (manual) checkProgress = AlertDialog.Builder(activity)
+            .setTitle("Checking for updates")
+            .setMessage("Looking for a newer version of CleanGram…")
+            .setView(android.widget.ProgressBar(activity).apply { setPadding(24, 24, 24, 24) })
+            .setNegativeButton(android.R.string.cancel) { _, _ -> checkJob?.cancel() }
+            .setOnCancelListener { checkJob?.cancel() }.showGlass(activity)
+        checkJob = activity.lifecycleScope.launch {
             try {
                 val release = withContext(Dispatchers.IO) {
                     val connection = open(UpdateRelease.API)
@@ -96,20 +91,28 @@ class AppUpdates(private val activity: AppCompatActivity) {
                 }
                 if (activity.isFinishing || activity.isDestroyed ||
                     !activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return@launch
+                checkProgress?.dismiss()
                 if (release == null) {
-                    if (manual) message("You’re up to date. No newer published release is available.")
+                    if (manual) AlertDialog.Builder(activity).setTitle("You’re up to date")
+                        .setMessage("You have the latest published version of CleanGram.")
+                        .setPositiveButton(R.string.close, null).showGlass(activity)
                 } else {
                     prompt = AlertDialog.Builder(activity)
                         .setTitle("Update available")
                         .setMessage("${release.name} is available. Download it now? Android will ask you to confirm installation.")
                         .setPositiveButton("Download update") { _, _ -> download(release) }
-                        .setNegativeButton("Later", null).show()
+                        .setNegativeButton("Later", null).showGlass(activity)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                if (manual) message("Couldn’t check for updates. Check your connection and try again later.")
-            } finally { checking = false }
+                if (manual && !activity.isFinishing && !activity.isDestroyed) {
+                    checkProgress?.dismiss()
+                    AlertDialog.Builder(activity).setTitle("Couldn’t check right now")
+                        .setMessage("Check your connection and try again in a little while.")
+                        .setPositiveButton(R.string.close, null).showGlass(activity)
+                }
+            } finally { checking = false; checkProgress?.dismiss(); checkProgress = null }
         }
     }
 
@@ -120,6 +123,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
             .setNegativeButton("Cancel") { _, _ -> downloading?.cancel() }
             .setCancelable(false).create()
         progress.show()
+        GlassDialogs.style(progress, activity)
         downloading = activity.lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -131,6 +135,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
                             check(connection.responseCode == 200) { "Download failed" }
                             check(connection.url.protocol == "https") { "Download must use HTTPS" }
                             var total = 0L
+                            var reported = -5
                             val digest = MessageDigest.getInstance("SHA-256")
                             connection.inputStream.use { input ->
                                 partial.outputStream().use { output ->
@@ -143,6 +148,11 @@ class AppUpdates(private val activity: AppCompatActivity) {
                                         check(total <= release.size && total <= UpdateRelease.MAX_APK_SIZE) { "Unexpected APK size" }
                                         output.write(buffer, 0, count)
                                         digest.update(buffer, 0, count)
+                                        val percent = (total * 100 / release.size).toInt()
+                                        if (percent >= reported + 5) {
+                                            reported = percent
+                                            withContext(Dispatchers.Main) { progress.setMessage("Downloading your update… $percent%") }
+                                        }
                                     }
                                 }
                             }
@@ -160,7 +170,9 @@ class AppUpdates(private val activity: AppCompatActivity) {
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                message("Update download failed or could not be verified. Please try again.")
+                AlertDialog.Builder(activity).setTitle("The update isn’t ready yet")
+                    .setMessage("The download failed or couldn’t be verified. Your current app is unchanged. Please try again.")
+                    .setPositiveButton(R.string.close, null).showGlass(activity)
             } finally { progress.dismiss() }
         }
     }
@@ -191,7 +203,7 @@ class AppUpdates(private val activity: AppCompatActivity) {
                         permissionLauncher.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:${activity.packageName}")))
                     } catch (_: Exception) { message("Open Android settings and allow CleanGram to install apps.") }
-                }.setNegativeButton("Later", null).show()
+                }.setNegativeButton("Later", null).showGlass(activity)
         } else installDownloaded()
     }
 
@@ -218,7 +230,9 @@ class AppUpdates(private val activity: AppCompatActivity) {
     }
 
     fun close() {
+        checkJob?.cancel()
         downloading?.cancel()
+        checkProgress?.dismiss()
         prompt?.dismiss()
     }
 
