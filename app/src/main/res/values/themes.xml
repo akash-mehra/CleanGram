@@ -39,7 +39,7 @@
         <item name="android:minHeight">48dp</item>
         <item name="android:textColor">@color/shell_accent</item>
     </style>
-    <style name="Widget.CleanGram.IconButton">
+    <style name="Widget.CleanGram.IconButton" parent="@android:style/Widget.ImageButton">
         <item name="android:layout_width">48dp</item>
         <item name="android:layout_height">48dp</item>
         <item name="android:padding">12dp</item>
@@ -47,12 +47,12 @@
         <item name="android:scaleType">centerInside</item>
         <item name="android:tint">@color/shell_text</item>
     </style>
-    <style name="Text.CleanGram.Heading">
+    <style name="Text.CleanGram.Heading" parent="TextAppearance.AppCompat.Headline">
         <item name="android:textSize">22sp</item>
         <item name="android:textColor">@color/shell_text</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
-    <style name="Text.CleanGram.Body">
+    <style name="Text.CleanGram.Body" parent="TextAppearance.AppCompat.Body1">
         <item name="android:textSize">15sp</item>
         <item name="android:textColor">@color/shell_secondary</item>
         <item name="android:lineSpacingExtra">4dp</item>
