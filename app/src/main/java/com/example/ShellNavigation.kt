@@ -36,7 +36,7 @@ object ShellNavigation {
     private val reserved = setOf("accounts", "direct", "p", "reel", "reels", "explore", "stories", "about", "legal", "challenge", "oauth", "emails", "web")
     fun profilePath(username: String): String? {
         val value = username.trim().removePrefix("@")
-        return if (Regex("[A-Za-z0-9._]{1,30}").matches(value) && value.lowercase(Locale.ROOT) !in reserved) "/$value/" else null
+        return if (Regex("[A-Za-z0-9._]{1,30}").matches(value) && value.any { it.isLetterOrDigit() || it == '_' } && value.lowercase(Locale.ROOT) !in reserved) "/$value/" else null
     }
 
     fun destination(url: String?): Destination? {

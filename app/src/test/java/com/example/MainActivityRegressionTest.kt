@@ -70,4 +70,27 @@ class MainActivityRegressionTest {
         assertEquals(0, activity.findViewById<FrameLayout>(R.id.fullscreenMedia).childCount)
         controller.pause().stop().destroy()
     }
+
+    @Test fun `Instagram account responses remain in WebView while server errors show retry`() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        val web = activity.findViewById<WebView>(R.id.webView)
+        val request = object : android.webkit.WebResourceRequest {
+            override fun getUrl() = android.net.Uri.parse("https://www.instagram.com/accounts/login/")
+            override fun isForMainFrame() = true
+            override fun isRedirect() = false
+            override fun hasGesture() = true
+            override fun getMethod() = "GET"
+            override fun getRequestHeaders() = emptyMap<String, String>()
+        }
+        fun response(code: Int) = android.webkit.WebResourceResponse("text/html", "UTF-8", code, "Response",
+            emptyMap(), java.io.ByteArrayInputStream(byteArrayOf()))
+        web.webViewClient.onReceivedHttpError(web, request, response(403))
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.errorContainer).visibility)
+        web.webViewClient.onReceivedHttpError(web, request, response(503))
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.errorContainer).visibility)
+        assertEquals(View.GONE, web.visibility)
+        controller.pause().stop().destroy()
+    }
+
 }

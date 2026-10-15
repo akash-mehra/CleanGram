@@ -12,15 +12,23 @@
             let url;
             try { url = new URL(link.href, location.href); } catch (_) { return false; }
             if (url.origin !== location.origin || !validProfile(url.pathname)) return false;
-            // Explicit labels only. Never infer the signed-in account from a feed avatar.
-            const label = (link.getAttribute('aria-label') || link.textContent || '').trim().toLowerCase();
-            return label === 'profile' || label === 'your profile' ||
-                !!link.querySelector('[aria-label="Profile" i], [aria-label="Your profile" i]');
+            // Explicit self-profile controls only; never a post header or feed avatar.
+            if (link.closest('article, [role="dialog"]')) return false;
+            const aria = (link.getAttribute('aria-label') || '').trim().toLowerCase();
+            const text = (link.textContent || '').trim().toLowerCase();
+            return aria === 'profile' || aria === 'your profile' ||
+                !!link.querySelector('[aria-label="Profile" i], [aria-label="Your profile" i]') ||
+                (text === 'profile' && !link.closest('main'));
+
         });
     }
+    let lastReportedPath = null;
     function reportRoute() {
         const bridge = window.CleanGramShell;
-        if (bridge && bridge.postMessage) bridge.postMessage(JSON.stringify({path: location.pathname}));
+        if (bridge && bridge.postMessage && lastReportedPath !== location.pathname) {
+            lastReportedPath = location.pathname;
+            bridge.postMessage(JSON.stringify({path: location.pathname}));
+        }
     }
     function refresh() {
         // Hide only a small, dedicated bottom navigation landmark if positively

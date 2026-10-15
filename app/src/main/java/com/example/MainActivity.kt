@@ -20,11 +20,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.TextView
 import android.media.AudioManager
-import android.content.res.ColorStateList
-import androidx.core.content.ContextCompat
 import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.webkit.WebViewCompat
@@ -373,7 +370,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, response: android.webkit.WebResourceResponse?) {
                 super.onReceivedHttpError(view, request, response)
-                if (request?.isForMainFrame == true && (response?.statusCode ?: 0) >= 400) showPageError()
+                if (request?.isForMainFrame == true && (response?.statusCode ?: 0) >= 500) showPageError()
             }
 
             override fun onReceivedError(
@@ -461,8 +458,7 @@ class MainActivity : AppCompatActivity() {
                 scaleX = 0.94f; scaleY = 0.94f
                 animate().scaleX(1f).scaleY(1f).setDuration(140).start()
             }
-            findViewById<androidx.appcompat.widget.AppCompatImageView>(icons[index]).supportImageTintList = ColorStateList.valueOf(
-                ContextCompat.getColor(this, if (selected) R.color.shell_accent else R.color.shell_secondary))
+
         }
     }
 
@@ -471,7 +467,7 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(DEFAULT_URL)
             return
         }
-        ShellNavigation.destination(url)?.let(::renderDestination)
+        ShellNavigation.destination(url)?.let { if (it != selectedDestination) renderDestination(it) }
     }
 
     private fun navigateNative(destination: ShellNavigation.Destination) {

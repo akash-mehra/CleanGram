@@ -17,6 +17,7 @@ function page(path = '/', options = {}) {
   };
   const links = (options.links || []).map(item => ({href:location.origin+item.path,
     textContent:item.label||'',getAttribute:()=>item.aria||'',querySelector:()=>item.profileIcon?{}:null,
+    closest:selector=>item.inArticle?{}:item.inMain && selector==='main'?{}:null,
     click(){item.clicked=true;if(!item.broken) history.pushState({},'',item.path);}}));
   const navs = (options.navs || []).map(item=>({
     hasAttribute:()=>!!item.marked,setAttribute:()=>item.marked=true,
@@ -95,4 +96,16 @@ test('saved mute preference applies to dynamically inserted media without duplic
   vm.runInContext(source,context);assert.equal(media[0].muted,true);
   context.window.__cleangramMuted=false;vm.runInContext(source,context);assert.equal(media[0].muted,false);
   media.push({muted:true});observers[0]();assert.equal(media[1].muted,false);assert.equal(observers.length,1);
+});
+
+
+test('an account named Profile inside a post is never treated as the self profile',()=>{
+  const p=page('/',{links:[{path:'/profile/',label:'Profile',inArticle:true}]});
+  assert.equal(p.window.__cleanGramShell.navigate('profile'),false);
+});
+
+test('repeated DOM refreshes do not flood native controls with unchanged routes',()=>{
+  const p=page('/');const count=p.messages.length;
+  p.window.__cleanGramShell.refresh();p.window.__cleanGramShell.refresh();
+  assert.equal(p.messages.length,count);
 });

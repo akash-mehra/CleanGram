@@ -95,7 +95,15 @@ class ShellPreviewTest {
         val updates = AppUpdates(activity)
         controller.start().resume().visible()
         val dialog = SettingsPanel.show(activity, updates, true, {}, {})
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         val panel = dialog.findViewById<View>(android.R.id.content)!!
+        // Offscreen Canvas capture has no window AttachInfo; native scroll
+        // indicator arrows are window-owned, so omit them in this preview only.
+        fun removeIndicators(view: View) {
+            view.scrollIndicators = 0
+            if (view is ViewGroup) for (index in 0 until view.childCount) removeIndicators(view.getChildAt(index))
+        }
+        removeIndicators(panel)
         panel.setBackgroundResource(R.drawable.shell_dialog_background)
         capture(panel, "settings-light", 358, 720)
         assertTrue(dialog.isShowing)

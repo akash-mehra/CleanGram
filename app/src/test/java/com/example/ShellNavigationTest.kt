@@ -20,7 +20,7 @@ class ShellNavigationTest {
 
     @Test fun `profile fallback accepts only a username and never a route or URL`() {
         assertEquals("/my.account/", ShellNavigation.profilePath(" @my.account "))
-        for (name in listOf("", "reels", "EXPLORE", "direct", "https://evil.test/", "../accounts/login", "name?param=x")) {
+        for (name in listOf("", ".", "..", "reels", "EXPLORE", "direct", "https://evil.test/", "../accounts/login", "name?param=x")) {
             assertNull(name, ShellNavigation.profilePath(name))
         }
     }
