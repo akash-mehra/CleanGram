@@ -121,11 +121,6 @@
         });
         // Keep fixed site headers (including Create) below the compact native toolbar.
         // Remember original offsets so keyboard/rotation/preferences can restore them.
-        shifted.forEach(function (original, element) {
-            if (original.value) element.style.setProperty(original.property, original.value, original.priority);
-            else element.style.removeProperty(original.property);
-        });
-        shifted.clear();
         document.querySelectorAll('header, [role="banner"]').forEach(function (header) {
             if (!compactChrome(header)) return;
             const computed = window.getComputedStyle(header);
@@ -143,9 +138,17 @@
             nav.style.setProperty('bottom', (offset + bottomClearance) + 'px');
         });
     }
+    function restoreOffsets() {
+        shifted.forEach(function (original, element) {
+            if (original.value) element.style.setProperty(original.property, original.value, original.priority);
+            else element.style.removeProperty(original.property);
+        });
+        shifted.clear();
+    }
     function refresh() {
         // Restore first: React may reuse a node for a different action on navigation.
         restoreHidden();
+        restoreOffsets();
         residualNavigation.clear();
         if (!siteControls) integrateNavigation();
         clearance(); reportRoute();

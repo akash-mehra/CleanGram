@@ -29,10 +29,12 @@ function page(path = '/', options = {}) {
   const links=(options.links||[]).map(control), buttons=(options.buttons||[]).map(control);
   const navs=(options.navs||[]).map(item=>{
     const actions=(item.actions|| (item.landmarkLinks?[{path:'/'},{path:'/direct/inbox/'}]:[])).map(control);
-    return {getBoundingClientRect:()=>({height:item.height,top:item.top,bottom:item.top+item.height}),closest:()=>null,
+    const navStyle=style(item);
+    return {computed:{position:item.fixed?'fixed':'static',get bottom(){return navStyle.getPropertyValue('bottom')||'0px';}},
+      getBoundingClientRect:()=>{const shift=parseFloat(navStyle.getPropertyValue('bottom'))||0;return {height:item.height,top:item.top-shift,bottom:item.top+item.height-shift};},closest:()=>null,
       querySelector:s=>s==='a[href="/"]'?actions.find(c=>c.href?.endsWith('.com/')):
         s==='a[href="/direct/inbox/"]'?actions.find(c=>c.href?.endsWith('/direct/inbox/')):item.containsContent?{}:null,
-      querySelectorAll:()=>actions,style:style(item),actions};
+      querySelectorAll:()=>actions,style:navStyle,actions};
   });
   for(let i=0;i<navs.length;i++) if(options.navs[i].generic) {
     links.push(...navs[i].actions);for(const action of navs[i].actions)action.parentElement=navs[i];
@@ -45,7 +47,7 @@ function page(path = '/', options = {}) {
       if(s==='nav, [role="navigation"]')return navs.filter((n,i)=>!options.navs[i].generic);
       return [];
     },addEventListener:(name,callback)=>events[name]=callback};
-  const window = {innerHeight:800,getComputedStyle:()=>({overflowY:'visible',position:'static'}),CleanGramShell:{postMessage:payload=>messages.push(JSON.parse(payload))},
+  const window = {innerHeight:800,getComputedStyle:element=>element.computed||({overflowY:'visible',position:'static'}),CleanGramShell:{postMessage:payload=>messages.push(JSON.parse(payload))},
     addEventListener:(name,callback)=>events[name]=callback};
   const context=vm.createContext({window,document,location,history,URL,
     setTimeout:callback=>timers.push(callback),requestAnimationFrame:callback=>callback(),
@@ -172,4 +174,15 @@ test('mobile bottom navigation can use Home and labelled Profile without an Inbo
 test('independent compact Home and Inbox shortcuts outside content are replaced',()=>{
  const home={path:'/'},inbox={path:'/direct/inbox/'};
  page('/',{links:[home,inbox]});assert(home.hidden);assert(inbox.hidden);
+});
+
+test('residual fixed navigation keeps unique actions above the dock after repeated refreshes',()=>{
+ const create={aria:'Create'},nav={generic:true,fixed:true,height:64,top:736,actions:[{path:'/'},{path:'/direct/inbox/'},create]};
+ const p=page('/',{navs:[nav]});
+ for(let i=0;i<4;i++){
+  assert.equal(p.navs[0].style.getPropertyValue('bottom'),'88px');
+  assert(!create.hidden);p.window.__cleanGramShell.refresh();
+ }
+ p.window.__cleanGramShell.setClearance(0,0,true);
+ assert.equal(p.navs[0].style.getPropertyValue('bottom'),'');
 });
