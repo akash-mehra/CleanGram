@@ -73,7 +73,8 @@ class MainActivityRegressionTest {
         controller.pause().stop().destroy()
     }
 
-    @Test fun `keyboard hides both floating controls without stacking bottom insets`() {
+    // API 30 exposes real IME visibility through WindowInsets. Legacy inset math is covered separately.
+    @Test @Config(sdk = [30]) fun `keyboard hides both floating controls without stacking bottom insets`() {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val activity = controller.get()
         val root = activity.findViewById<View>(R.id.rootContainer)
