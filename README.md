@@ -79,7 +79,7 @@ Light and dark resources follow device appearance. Navigation uses lightly trans
 - `MainActivity.kt`: WebView lifecycle, native controls, sound, file chooser and fullscreen host.
 - `SettingsPanel.kt`, `GlassSurface.kt`, `GlassDialogs.kt`, themed resources: native visual styling.
 - `assets/instagram-shell.js`: native route notifications, link navigation and optional duplicate-nav suppression. It only suppresses a positively identified, compact bottom navigation landmark with Home and Inbox links, bounded height, and no content/form/media descendants. Unknown Instagram layouts keep their original controls.
-- `assets/distraction-blocking.js`: discovery policy, kept separate from styling. Blocks `/reels` and `/explore` through full and client-side navigation, while preserving `/reel/<post>`, `/p/<post>`, DM attachments and followed posts. Suggestion removal stays limited to exact labels inside single articles.
+- `assets/distraction-blocking.js`: discovery policy, kept separate from styling. Blocks `/reels` and `/explore` through full and client-side navigation, while preserving `/reel/<post>`, `/p/<post>`, DM attachments and followed posts. Suggestion removal stays limited to exact labels in article headers or explicit suggestion-label elements, never captions or generic page containers.
 - `assets/media-preferences.js`: saved global media mute preference.
 - `AppUpdates.kt` / `UpdateRelease.kt`: existing digest, version, app ID and permanent-certificate validation and Android installer flow.
 

@@ -68,7 +68,7 @@
                     if (location.pathname !== '/') return;
                     // A Reel permalink can belong to a followed-account post.
                     // Keep these posts; block the discovery feed via its route instead.
-                    const textNodes = document.querySelectorAll('article span, article p, article h2, article h3, article h4');
+                    const textNodes = document.querySelectorAll('article header span, article header p, article h2, article h3, article [data-testid="suggested-post-label"]');
                     textNodes.forEach(function(node) {
                         if (node.children.length === 0 && node.textContent) {
                             const trimmedText = node.textContent.trim().toLowerCase();

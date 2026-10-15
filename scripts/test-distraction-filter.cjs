@@ -13,7 +13,9 @@ function page(path = '/direct/t/123/', options = {}) {
     getElementById: () => true,
     querySelectorAll: (selector) => selector === 'a[href*="/reel/"]'
       ? [{closest: () => ({style: {setProperty: () => hidden.add('home-reel')}})}]
-      : selector.startsWith('a[href') ? [shortcut] : (options.textNodes || []),
+      : selector.startsWith('a[href') ? [shortcut]
+      : selector.includes('article header') ? (options.textNodes || []).filter(node => node.kind !== 'caption')
+      : (options.textNodes || []),
     addEventListener: (event, callback) => documentListeners[event] = callback,
   };
   const location = {
@@ -117,6 +119,15 @@ test('ordinary post text mentioning suggestions does not hide the post', () => {
   let hidden = false;
   const post = {querySelector: () => null, style: {setProperty: () => hidden = true}};
   const caption = {children: [], textContent: 'I have suggestions for you today', closest: () => post};
+  page('/', {textNodes: [caption]});
+  assert.equal(hidden, false);
+});
+
+
+test('a followed post caption exactly matching a suggestion label remains visible', () => {
+  let hidden = false;
+  const post = {querySelector: () => null, style: {setProperty: () => hidden = true}};
+  const caption = {kind: 'caption', children: [], textContent: 'Suggested for you', closest: () => post};
   page('/', {textNodes: [caption]});
   assert.equal(hidden, false);
 });
