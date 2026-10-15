@@ -73,6 +73,28 @@ class MainActivityRegressionTest {
         controller.pause().stop().destroy()
     }
 
+    @Test fun `keyboard hides both floating controls without stacking bottom insets`() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        val root = activity.findViewById<View>(R.id.rootContainer)
+        fun dispatch(keyboard: Boolean) {
+            val insets = androidx.core.view.WindowInsetsCompat.Builder()
+                .setInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars(), androidx.core.graphics.Insets.of(0, 24, 0, 24))
+                .setInsets(androidx.core.view.WindowInsetsCompat.Type.ime(), androidx.core.graphics.Insets.of(0, 0, 0, if (keyboard) 300 else 0))
+                .setVisible(androidx.core.view.WindowInsetsCompat.Type.ime(), keyboard).build()
+            androidx.core.view.ViewCompat.dispatchApplyWindowInsets(root, insets)
+        }
+        dispatch(true)
+        assertEquals(300, root.paddingBottom)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.bottomDock).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.toolbarBand).visibility)
+        dispatch(false)
+        assertEquals(24, root.paddingBottom)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.bottomDock).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.toolbarBand).visibility)
+        controller.pause().stop().destroy()
+    }
+
     @Test fun `Instagram account responses remain in WebView while server errors show retry`() {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val activity = controller.get()

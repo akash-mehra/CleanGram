@@ -18,7 +18,7 @@ if report.exists():
         print([x.attrib for x in issue.findall('location')])
 # Enables review in environments where artifact download networking is unavailable.
 # Only synthetic previews of the native shell are exported, never WebView/account data.
-for name in ('home-light', 'home-dark', 'settings-light'):
+for name in ('home-light', 'home-dark', 'settings-light', 'notifications-light'):
     path = Path(f'app/build/outputs/shell-previews/{name}.png')
     if path.exists() and path.stat().st_size <= 160000:
         print(f'CLEANGRAM_PREVIEW {name} {base64.b64encode(path.read_bytes()).decode()}')

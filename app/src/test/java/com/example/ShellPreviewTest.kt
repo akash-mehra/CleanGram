@@ -44,11 +44,12 @@ class ShellPreviewTest {
         bitmap.recycle()
     }
 
-    private fun shell(name: String, error: Boolean = false, width: Int = 390, height: Int = 760) {
+    private fun shell(name: String, error: Boolean = false, width: Int = 390, height: Int = 760, notifications: Boolean = false) {
         val controller = Robolectric.buildActivity(ShellPreviewActivity::class.java).setup()
         val activity = controller.get()
         val root = activity.findViewById<View>(R.id.rootContainer)
-        activity.findViewById<View>(R.id.navHome).isSelected = true
+        activity.findViewById<View>(if (notifications) R.id.navNotifications else R.id.navHome).isSelected = true
+        if (notifications) activity.findViewById<TextView>(R.id.screenTitle).setText(R.string.notifications)
         activity.findViewById<View>(R.id.loadingContainer).visibility = View.GONE
         if (error) {
             activity.findViewById<View>(R.id.webView).visibility = View.GONE
@@ -81,6 +82,7 @@ class ShellPreviewTest {
         controller.pause().stop().destroy()
     }
 
+    @Test fun notifications() = shell("notifications-light", notifications = true)
     @Test fun lightHome() = shell("home-light")
     @Test @Config(qualifiers = "w390dp-h844dp-night-mdpi") fun darkHome() = shell("home-dark")
     @Test fun enlargedText() {

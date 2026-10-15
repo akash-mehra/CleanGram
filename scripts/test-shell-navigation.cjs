@@ -37,10 +37,10 @@ function page(path = '/', options = {}) {
   for(let i=0;i<navs.length;i++) if(options.navs[i].generic) {
     links.push(...navs[i].actions);for(const action of navs[i].actions)action.parentElement=navs[i];
   }
-  const stylesheet={textContent:''},root={setAttribute(){},toggleAttribute(){},appendChild(){}},body={setAttribute(){}};
+  const stylesheet={textContent:''},root={setAttribute(){},toggleAttribute(){},appendChild(){}},body={setAttribute(){},hasAttribute:()=>false,style:style()};
   const document = {documentElement:options.noDocument?null:root,body,
     getElementById:()=>stylesheet,querySelectorAll(s){
-      if(s==='a[href]')return links;
+      if(s==='a[href]')return [...links,...navs.flatMap(n=>n.actions).filter(c=>c.href)];
       if(s==='a[href], button, [role="button"]')return [...links,...buttons];
       if(s==='nav, [role="navigation"]')return navs.filter((n,i)=>!options.navs[i].generic);
       return [];
@@ -151,9 +151,9 @@ test('Create and other unknown actions survive duplicate shortcut suppression',(
 test('website navigation can be restored and clearance follows keyboard changes',()=>{
  const nav={height:64,top:736,landmarkLinks:true};const p=page('/',{navs:[nav]});
  assert(nav.hidden);p.window.__cleanGramShell.setClearance(0,0,true);assert(!nav.hidden);
- assert(p.stylesheet.textContent.includes('padding-bottom:0px'));
+ assert(p.stylesheet.textContent.includes('+ 0px)'));
  p.window.__cleanGramShell.setClearance(64,88,false);assert(nav.hidden);
- assert(p.stylesheet.textContent.includes('padding-bottom:88px'));
+ assert(p.stylesheet.textContent.includes('+ 88px)'));
 });
 test('the latest native navigation wins over a pending fallback',()=>{
  const p=page('/');p.window.__cleanGramShell.navigate('messages');p.window.__cleanGramShell.navigate('notifications');p.flush();
@@ -162,4 +162,14 @@ test('the latest native navigation wins over a pending fallback',()=>{
 test('Back cancels pending native fallback navigation',()=>{
  const p=page('/');p.window.__cleanGramShell.navigate('messages');p.events.popstate();p.flush();
  assert.deepEqual(p.assignments,[]);
+});
+
+test('mobile bottom navigation can use Home and labelled Profile without an Inbox link',()=>{
+ const home={path:'/'},profile={path:'/my.account/',aria:'Profile'};
+ const nav={generic:true,height:64,top:736,actions:[home,profile]};
+ page('/',{navs:[nav]});assert(nav.hidden);
+});
+test('independent compact Home and Inbox shortcuts outside content are replaced',()=>{
+ const home={path:'/'},inbox={path:'/direct/inbox/'};
+ page('/',{links:[home,inbox]});assert(home.hidden);assert(inbox.hidden);
 });

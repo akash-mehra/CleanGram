@@ -72,12 +72,15 @@
         controls.filter(c => pathOf(c) === '/' && !c.closest(excluded)).forEach(function (home) {
             let parent = home.parentElement;
             for (let depth = 0; parent && depth < 3; depth++, parent = parent.parentElement) {
-                if (compactChrome(parent) && parent.querySelector('a[href="/direct/inbox/"]')) candidates.add(parent);
+                const siblings = Array.from(parent.querySelectorAll('a[href], button, [role="button"]'));
+                if (compactChrome(parent) && siblings.some(c => pathOf(c) === '/direct/inbox/' || c === profile)) candidates.add(parent);
             }
         });
         candidates.forEach(function (nav) {
-            if (!compactChrome(nav) || !nav.querySelector('a[href="/"]') || !nav.querySelector('a[href="/direct/inbox/"]')) return;
+            if (!compactChrome(nav)) return;
             const actions = Array.from(nav.querySelectorAll('a[href], button, [role="button"]'));
+            if (!actions.some(c => pathOf(c) === '/') ||
+                !actions.some(c => pathOf(c) === '/direct/inbox/' || c === profile)) return;
             // A Create, upload, search, menu or unknown action keeps its container.
             const remaining = actions.filter(c => !isDuplicate(c, profile, notification) &&
                 !/^\/(reels|explore)\//.test(pathOf(c) || ''));
@@ -88,8 +91,8 @@
             }
         });
         // Also replace independent explicitly labelled shortcuts in small chrome.
-        [profile, notification].filter(Boolean).forEach(function (control) {
-            if (compactChrome(control)) hide(control);
+        controls.filter(c => isDuplicate(c, profile, notification)).forEach(function (control) {
+            if (compactChrome(control) && !control.closest('main')) hide(control);
         });
     }
     function clearance() {
@@ -100,14 +103,21 @@
         }
         // Scoped, additive clearance. No ancestor is hidden or resized to crop content.
         const css = 'html[data-cleangram-shell] {scroll-padding-top:' + topClearance + 'px;scroll-padding-bottom:' + bottomClearance + 'px}' +
-            'body[data-cleangram-shell] {padding-top:' + topClearance + 'px!important;padding-bottom:' + bottomClearance + 'px!important;box-sizing:border-box}' +
-            'main[data-cleangram-scroll] {scroll-padding-top:' + topClearance + 'px;scroll-padding-bottom:' + bottomClearance + 'px;padding-bottom:' + bottomClearance + 'px!important;box-sizing:border-box}';
+            'body[data-cleangram-shell] {padding-top:calc(var(--cleangram-original-top,0px) + ' + topClearance + 'px)!important;padding-bottom:calc(var(--cleangram-original-bottom,0px) + ' + bottomClearance + 'px)!important;box-sizing:border-box}' +
+            'main[data-cleangram-scroll] {scroll-padding-top:' + topClearance + 'px;scroll-padding-bottom:' + bottomClearance + 'px;padding-bottom:calc(var(--cleangram-original-bottom,0px) + ' + bottomClearance + 'px)!important;box-sizing:border-box}';
+        function prepare(element, attribute) {
+            if (!element || element.hasAttribute(attribute)) return;
+            const computed = window.getComputedStyle(element);
+            element.style.setProperty('--cleangram-original-top', computed.paddingTop || '0px');
+            element.style.setProperty('--cleangram-original-bottom', computed.paddingBottom || '0px');
+            element.setAttribute(attribute, '');
+        }
+        prepare(document.body, 'data-cleangram-shell');
         if (style.textContent !== css) style.textContent = css;
         document.documentElement.setAttribute('data-cleangram-shell', '');
-        if (document.body) document.body.setAttribute('data-cleangram-shell', '');
         document.querySelectorAll('main').forEach(function (main) {
             const computed = window.getComputedStyle(main);
-            if (/(auto|scroll)/.test(computed.overflowY)) main.setAttribute('data-cleangram-scroll', '');
+            if (/(auto|scroll)/.test(computed.overflowY)) prepare(main, 'data-cleangram-scroll');
         });
         // Keep fixed site headers (including Create) below the compact native toolbar.
         // Remember original offsets so keyboard/rotation/preferences can restore them.
@@ -160,8 +170,9 @@
         const startingPath = location.pathname;
         setTimeout(function () {
             if (ticket !== pendingNavigation) return;
-            if (location.pathname !== target && location.pathname === startingPath &&
-                !/^\/(accounts\/(login|signup)|challenge)\//.test(location.pathname)) location.assign(target);
+            const authentication = location.pathname.startsWith('/accounts/') && !activityPaths.includes(location.pathname);
+            if (location.pathname !== target && location.pathname === startingPath && !authentication &&
+                !location.pathname.startsWith('/challenge/')) location.assign(target);
             reportRoute();
         }, 600);
         return true;
